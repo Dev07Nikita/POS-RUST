@@ -214,7 +214,7 @@ async function loadInventory() {
 
 async function loadIssues() {
     try {
-        const response = await fetch('http://localhost:8080/api/support');
+        const response = await fetch(`http://localhost:8080/api/support?dept=${state.user.role}`);
         if (response.ok) {
             const issues = await response.json();
             const container = document.getElementById('support-messages');
@@ -222,15 +222,18 @@ async function loadIssues() {
                 <div class="flex justify-start">
                     <div class="bg-slate-800 p-4 rounded-2xl rounded-tl-none max-w-[80%]">
                         <p class="text-[10px] font-black text-amber-500 uppercase mb-1">System Assistant</p>
-                        <p class="text-sm">Welcome to the Safi Support Hub. Please describe any issues or requests for your department below.</p>
+                        <p class="text-sm">Welcome to the Safi Support Hub. You are viewing messages for the ${state.user.role} department.</p>
                     </div>
                 </div>
             ` + issues.map(issue => `
                 <div class="flex ${issue.department === state.user.role ? 'justify-end' : 'justify-start'}">
                     <div class="${issue.department === state.user.role ? 'bg-amber-500 text-slate-900' : 'bg-slate-800 text-white'} p-4 rounded-2xl ${issue.department === state.user.role ? 'rounded-tr-none' : 'rounded-tl-none'} max-w-[80%]">
-                        <p class="text-[10px] font-black ${issue.department === state.user.role ? 'text-slate-800/50' : 'text-amber-500'} uppercase mb-1">${issue.department}</p>
-                        <p class="text-sm">${issue.message}</p>
-                        <p class="text-[8px] mt-1 opacity-50">${new Date(issue.timestamp).toLocaleTimeString()}</p>
+                        <div class="flex justify-between items-center gap-4 mb-1">
+                            <p class="text-[10px] font-black ${issue.department === state.user.role ? 'text-slate-800/50' : 'text-amber-500'} uppercase">From: ${issue.department}</p>
+                            <p class="text-[8px] font-bold ${issue.department === state.user.role ? 'text-slate-800/40' : 'text-slate-500'} uppercase">To: ${issue.targetDepartment}</p>
+                        </div>
+                        <p class="text-sm font-medium">${issue.message}</p>
+                        <p class="text-[8px] mt-2 opacity-50">${new Date(issue.timestamp).toLocaleTimeString()}</p>
                     </div>
                 </div>
             `).join('');
@@ -243,6 +246,7 @@ async function loadIssues() {
 
 async function submitIssue() {
     const input = document.getElementById('supportInput');
+    const target = document.getElementById('supportTarget').value;
     const message = input.value.trim();
     if (!message) return;
 
@@ -252,6 +256,7 @@ async function submitIssue() {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 department: state.user.role,
+                targetDepartment: target,
                 message: message
             })
         });

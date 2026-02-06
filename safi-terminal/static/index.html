@@ -296,6 +296,15 @@
                 </div>
             </div>
             <div class="flex gap-4">
+                <select id="supportTarget"
+                    class="bg-slate-900 border border-slate-700 rounded-2xl py-4 px-4 outline-none text-slate-400 text-sm">
+                    <option value="ALL">To: Everyone</option>
+                    <option value="MANAGER">To: Manager</option>
+                    <option value="LOGISTICS">To: Logistics</option>
+                    <option value="SALES">To: Sales</option>
+                    <option value="ADMIN">To: Super Admin</option>
+                    <option value="CASHIER">To: Cashiers</option>
+                </select>
                 <input type="text" id="supportInput" placeholder="Describe the issue..."
                     class="flex-grow bg-slate-900 border border-slate-700 rounded-2xl py-4 px-6 outline-none focus:ring-2 focus:ring-amber-500">
                 <button onclick="submitIssue()" class="px-8 py-4 gold-gradient rounded-2xl font-bold">SEND</button>

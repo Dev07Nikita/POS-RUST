@@ -18,6 +18,9 @@ public class SupportIssue {
     @Column(nullable = false)
     private String department; // The department raising the issue (e.g., CASHIER, LOGISTICS)
 
+    @Column(nullable = false)
+    private String targetDepartment; // The destination department (e.g., MANAGER, LOGISTICS, ALL)
+
     @Column(columnDefinition = "TEXT", nullable = false)
     private String message;
 

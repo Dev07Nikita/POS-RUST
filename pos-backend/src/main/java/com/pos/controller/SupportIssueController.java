@@ -17,7 +17,10 @@ public class SupportIssueController {
     private final SupportIssueRepository supportIssueRepository;
 
     @GetMapping
-    public List<SupportIssue> getAllIssues() {
+    public List<SupportIssue> getIssues(@RequestParam(required = false) String dept) {
+        if (dept != null && !dept.isEmpty()) {
+            return supportIssueRepository.findMessagesForDepartment(dept);
+        }
         return supportIssueRepository.findAll();
     }
 
