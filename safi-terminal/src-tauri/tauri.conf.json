@@ -1,61 +1,33 @@
 {
+  "productName": "SafiPOS",
+  "version": "1.0.0",
+  "identifier": "com.safi.pos",
   "build": {
     "beforeDevCommand": "",
     "beforeBuildCommand": "",
-    "devPath": "http://localhost:3000",
-    "distDir": "../static"
+    "frontendDist": "../static",
+    "devUrl": "http://localhost:3000"
   },
-  "package": {
-    "productName": "SafiPOS",
-    "version": "1.0.0"
-  },
-  "tauri": {
-    "allowlist": {
-      "all": true
-    },
-    "bundle": {
-      "active": true,
-      "category": "Business",
-      "copyright": "",
-      "externalBin": [],
-      "icon": [
-        "icons/32x32.png",
-        "icons/128x128.png",
-        "icons/128x128@2x.png",
-        "icons/icon.icns",
-        "icons/icon.ico"
-      ],
-      "identifier": "com.safi.pos",
-      "longDescription": "",
-      "macOS": {
-        "entitlements": null,
-        "exceptionDomain": "",
-        "frameworks": [],
-        "signingConfig": null
-      },
-      "resources": [],
-      "shortDescription": "",
-      "targets": "all",
-      "windows": {
-        "certificateThumbprint": null,
-        "digestAlgorithm": "sha256",
-        "timestampServer": ""
-      }
-    },
-    "security": {
-      "csp": null
-    },
-    "updater": {
-      "active": false
-    },
+  "app": {
     "windows": [
       {
-        "fullscreen": false,
+        "title": "Safi Enterprise POS",
+        "width": 1200,
         "height": 800,
         "resizable": true,
-        "title": "Safi Enterprise POS",
-        "width": 1200
+        "fullscreen": false
       }
+    ]
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
     ]
   }
 }
