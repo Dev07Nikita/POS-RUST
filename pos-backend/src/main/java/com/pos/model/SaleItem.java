@@ -19,8 +19,6 @@ public class SaleItem {
     private Product product;
 
     private Integer quantity;
-
     private Double unitPrice;
-
     private Double subtotal;
 }
