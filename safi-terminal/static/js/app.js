@@ -250,6 +250,11 @@ async function submitIssue() {
     const message = input.value.trim();
     if (!message) return;
 
+    if (!state.user) {
+        alert("You must be logged in to send messages.");
+        return;
+    }
+
     try {
         const response = await fetch('http://localhost:8080/api/support', {
             method: 'POST',
@@ -263,9 +268,11 @@ async function submitIssue() {
         if (response.ok) {
             input.value = '';
             loadIssues();
+        } else {
+            throw new Error("Server rejected the message. (Status: " + response.status + ")");
         }
     } catch (e) {
-        alert("Failed to send issue. Check Hub connection.");
+        alert("Failed to send: " + e.message + "\nEnsure Hub is running at 8080.");
     }
 }
 
