@@ -6,7 +6,7 @@ const state = {
         { id: 4, name: 'Organic Honey', price: 850, code: '004', category: 'Retail' },
     ],
     cart: [],
-    cashier: "Antigravity Dev",
+    user: null,
     business: "SAFI MODERN RETAIL"
 };
 
@@ -14,14 +14,64 @@ const UI = {
     grid: document.getElementById('product-grid'),
     cart: document.getElementById('cart-items'),
     total: document.getElementById('total-val'),
-    cashier: document.getElementById('display-cashier'),
+    userDisplay: document.getElementById('display-user'),
+    roleBadge: document.getElementById('userRoleBadge'),
+    cashierDisplay: document.getElementById('display-cashier'),
     mpesaModal: document.getElementById('payment-modal'),
-    receiptModal: document.getElementById('receipt-modal')
+    receiptModal: document.getElementById('receipt-modal'),
+    loginOverlay: document.getElementById('loginOverlay')
 };
 
+async function handleLogin() {
+    const user = document.getElementById('username').value;
+    const pass = document.getElementById('password').value;
+    const error = document.getElementById('loginError');
+
+    // Simulated multi-profile auth
+    const demoProfiles = {
+        'admin': { name: 'Super Admin', role: 'ADMIN' },
+        'manager': { name: 'Store Manager', role: 'MANAGER' },
+        'cashier': { name: 'Main Cashier', role: 'CASHIER' },
+        'logistics': { name: 'Logistics Lead', role: 'LOGISTICS' },
+        'sales': { name: 'Sales Rep', role: 'SALES' }
+    };
+
+    if (demoProfiles[user] && pass === '1234') {
+        state.user = demoProfiles[user];
+        init();
+        UI.loginOverlay.classList.add('hidden');
+    } else {
+        error.classList.remove('hidden');
+    }
+}
+
 function init() {
-    UI.cashier.innerText = state.cashier;
+    if (!state.user) return;
+    UI.userDisplay.innerText = state.user.name;
+    UI.cashierDisplay.innerText = state.user.name;
+    UI.roleBadge.innerText = state.user.role;
+    applyPermissions(state.user.role);
     renderProducts();
+}
+
+function applyPermissions(role) {
+    const permissions = {
+        'ADMIN': ['menuInventory', 'menuReports', 'menuLogistics', 'menuAdmin'],
+        'MANAGER': ['menuInventory', 'menuReports'],
+        'LOGISTICS': ['menuLogistics'],
+        'CASHIER': [],
+        'SALES': ['menuReports']
+    };
+
+    // Hide all
+    ['menuInventory', 'menuReports', 'menuLogistics', 'menuAdmin'].forEach(id => {
+        document.getElementById(id).classList.add('hidden');
+    });
+
+    // Show allowed
+    (permissions[role] || []).forEach(id => {
+        document.getElementById(id).classList.remove('hidden');
+    });
 }
 
 function renderProducts() {
