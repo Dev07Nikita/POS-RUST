@@ -1,0 +1,32 @@
+# Build Artifacts
+/pos-backend/build/
+/pos-backend/.gradle/
+/pos-backend/.mvn/wrapper/maven-wrapper.jar
+/safi-terminal/target/
+/safi-terminal/src-tauri/target/
+*.pdb
+*.rlib
+*.rmeta
+*.exe
+*.dll
+*.so
+*.dylib
+
+# IDEs & System
+.idea/
+.vscode/
+*.swp
+*.log
+.DS_Store
+
+# Databases
+*.db
+*.db-journal
+
+# Dependencies
+node_modules/
+.env
+
+# Windows-specific
+Thumbs.db
+desktop.ini

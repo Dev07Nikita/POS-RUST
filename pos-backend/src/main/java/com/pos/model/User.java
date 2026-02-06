@@ -23,6 +23,7 @@ public class User {
 
     private String fullName;
     private String email;
+    @Builder.Default
     private boolean enabled = true;
 
     @ManyToMany(fetch = FetchType.EAGER)

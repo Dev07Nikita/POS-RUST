@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "identifier": "com.safi.pos",
   "build": {
-    "beforeDevCommand": "",
+    "beforeDevCommand": "cargo run",
     "beforeBuildCommand": "",
     "frontendDist": "../static",
     "devUrl": "http://localhost:3000"
@@ -23,10 +23,6 @@
     "active": true,
     "targets": "all",
     "icon": [
-      "icons/32x32.png",
-      "icons/128x128.png",
-      "icons/128x128@2x.png",
-      "icons/icon.icns",
       "icons/icon.ico"
     ]
   }

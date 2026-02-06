@@ -27,11 +27,40 @@ public class AuthController {
     @PostMapping("/register")
     public ResponseEntity<?> register(@RequestBody RegisterRequest request) {
         try {
-            User user = authService.registerUser(request.getUsername(), request.getPassword(), request.getRole());
+            User user = authService.registerUser(request.getUsername(), request.getPassword(), request.getEmail(),
+                    request.getRole());
             return ResponseEntity.ok(user);
         } catch (Exception e) {
             return ResponseEntity.badRequest().body("Registration failed: " + e.getMessage());
         }
+    }
+
+    @PostMapping("/forgot-password")
+    public ResponseEntity<?> forgotPassword(@RequestBody ForgotPasswordRequest request) {
+        String result = authService.requestPasswordReset(request.getEmail());
+        if ("CODE_SENT".equals(result))
+            return ResponseEntity.ok("Verification code sent to your email");
+        return ResponseEntity.badRequest().body(result);
+    }
+
+    @PostMapping("/reset-password")
+    public ResponseEntity<?> resetPassword(@RequestBody ResetPasswordRequest request) {
+        boolean success = authService.resetPassword(request.getEmail(), request.getCode(), request.getNewPassword());
+        if (success)
+            return ResponseEntity.ok("Password reset successfully");
+        return ResponseEntity.badRequest().body("Invalid or expired code");
+    }
+
+    @GetMapping("/logs/{username}")
+    public ResponseEntity<?> getLogs(@PathVariable String username) {
+        return ResponseEntity.ok(authService.getLogs(username));
+    }
+
+    @PostMapping("/logout")
+    public ResponseEntity<?> logout(@RequestBody Map<String, String> body) {
+        String username = body.get("username");
+        // Log the logout action in audit logs
+        return ResponseEntity.ok("Logged out successfully");
     }
 }
 
@@ -45,5 +74,18 @@ class LoginRequest {
 class RegisterRequest {
     private String username;
     private String password;
+    private String email;
     private String role;
+}
+
+@Data
+class ForgotPasswordRequest {
+    private String email;
+}
+
+@Data
+class ResetPasswordRequest {
+    private String email;
+    private String code;
+    private String newPassword;
 }

@@ -76,7 +76,8 @@
 <body class="overflow-hidden">
     <!-- Login Overlay -->
     <div id="loginOverlay" class="login-overlay">
-        <div class="login-card">
+        <!-- Sign In State -->
+        <div id="signInBox" class="login-card">
             <h2 class="text-3xl font-black mb-8 text-amber-500 tracking-tighter">SAFI ENTERPRISE</h2>
             <div class="space-y-4">
                 <input type="text" id="username" placeholder="Username"
@@ -86,9 +87,60 @@
                 <button onclick="handleLogin()"
                     class="w-full py-4 gold-gradient rounded-2xl font-bold text-lg hover:scale-[1.02] transition">SIGN
                     IN</button>
+                <div class="flex justify-between px-2 pt-2">
+                    <button onclick="switchAuthState('signup')"
+                        class="text-xs text-slate-500 hover:text-amber-500">Create Account</button>
+                    <button onclick="switchAuthState('forgot')"
+                        class="text-xs text-slate-500 hover:text-amber-500">Forgot Password?</button>
+                </div>
                 <p id="loginError" class="text-red-500 text-sm hidden mt-4">Invalid credentials. Try admin / 1234</p>
             </div>
-            <p class="mt-8 text-slate-500 text-xs uppercase tracking-widest font-bold">Secure Multi-Profile Access</p>
+        </div>
+
+        <!-- Sign Up State -->
+        <div id="signUpBox" class="login-card hidden">
+            <h2 class="text-3xl font-black mb-8 text-amber-500 tracking-tighter">CREATE ACCOUNT</h2>
+            <div class="space-y-4 text-left">
+                <input type="text" id="regUsername" placeholder="Username"
+                    class="w-full bg-slate-900/50 border border-slate-700 rounded-2xl py-4 px-6 outline-none focus:ring-2 focus:ring-amber-500">
+                <input type="email" id="regEmail" placeholder="Email Address"
+                    class="w-full bg-slate-900/50 border border-slate-700 rounded-2xl py-4 px-6 outline-none focus:ring-2 focus:ring-amber-500">
+                <input type="password" id="regPassword" placeholder="Password"
+                    class="w-full bg-slate-900/50 border border-slate-700 rounded-2xl py-4 px-6 outline-none focus:ring-2 focus:ring-amber-500">
+                <select id="regRole"
+                    class="w-full bg-slate-900/50 border border-slate-700 rounded-2xl py-4 px-6 outline-none focus:ring-2 focus:ring-amber-500 text-slate-400">
+                    <option value="CASHIER">Cashier</option>
+                    <option value="MANAGER">Manager</option>
+                    <option value="LOGISTICS">Logistics</option>
+                    <option value="SALES">Sales</option>
+                </select>
+                <button onclick="handleSignUp()"
+                    class="w-full py-4 gold-gradient rounded-2xl font-bold text-lg">REGISTER</button>
+                <button onclick="switchAuthState('login')" class="w-full text-sm text-slate-500 mt-2">Back to
+                    Login</button>
+            </div>
+        </div>
+
+        <!-- Forgot Password State -->
+        <div id="forgotBox" class="login-card hidden">
+            <h2 class="text-3xl font-black mb-6 text-amber-500 tracking-tighter">RESET ACCESS</h2>
+            <div id="forgotStep1" class="space-y-4">
+                <p class="text-slate-400 text-sm mb-4">Enter your email to receive a 6-digit reset code.</p>
+                <input type="email" id="forgotEmail" placeholder="user@example.com"
+                    class="w-full bg-slate-900/50 border border-slate-700 rounded-2xl py-4 px-6 outline-none">
+                <button onclick="handleForgotRequest()"
+                    class="w-full py-4 gold-gradient rounded-2xl font-bold text-lg">SEND CODE</button>
+            </div>
+            <div id="forgotStep2" class="space-y-4 hidden">
+                <p class="text-slate-400 text-sm mb-4">Verification code sent!</p>
+                <input type="text" id="resetCode" placeholder="6-digit code"
+                    class="w-full bg-slate-900/50 border border-slate-700 rounded-2xl py-4 px-6 text-center text-2xl tracking-[1rem]">
+                <input type="password" id="newPassword" placeholder="New Password"
+                    class="w-full bg-slate-900/50 border border-slate-700 rounded-2xl py-4 px-6">
+                <button onclick="handleResetPassword()"
+                    class="w-full py-4 gold-gradient rounded-2xl font-bold text-lg">UPDATE PASSWORD</button>
+            </div>
+            <button onclick="switchAuthState('login')" class="mt-8 text-sm text-slate-500">Cancel</button>
         </div>
     </div>
     <!-- Navigation -->
@@ -122,17 +174,17 @@
             <div class="mb-6 px-2">
                 <p class="text-[10px] font-black uppercase tracking-widest text-amber-500/50 mb-4">Enterprise Menu</p>
                 <div class="space-y-1">
-                    <button
+                    <button onclick="switchView('checkout')"
                         class="w-full text-left px-4 py-3 rounded-xl bg-amber-500/10 text-amber-500 flex items-center gap-3 font-bold text-sm">
                         <span class="material-icons text-lg">dashboard</span>
                         Checkout
                     </button>
-                    <button id="menuInventory"
+                    <button id="menuInventory" onclick="switchView('inventory')"
                         class="w-full text-left px-4 py-3 rounded-xl hover:bg-white/5 flex items-center gap-3 font-bold text-sm text-slate-400 hidden">
                         <span class="material-icons text-lg">inventory_2</span>
                         Inventory
                     </button>
-                    <button id="menuReports"
+                    <button id="menuReports" onclick="switchView('analytics')"
                         class="w-full text-left px-4 py-3 rounded-xl hover:bg-white/5 flex items-center gap-3 font-bold text-sm text-slate-400 hidden">
                         <span class="material-icons text-lg">analytics</span>
                         Analytics
@@ -142,10 +194,15 @@
                         <span class="material-icons text-lg">local_shipping</span>
                         Logistics
                     </button>
-                    <button id="menuAdmin"
+                    <button id="menuAdmin" onclick="switchView('admin')"
                         class="w-full text-left px-4 py-3 rounded-xl hover:bg-white/5 flex items-center gap-3 font-bold text-sm text-slate-400 hidden">
                         <span class="material-icons text-lg">admin_panel_settings</span>
                         Admin Hub
+                    </button>
+                    <button onclick="handleLogout()"
+                        class="w-full text-left px-4 py-3 rounded-xl hover:bg-red-500/10 text-red-500 flex items-center gap-3 font-bold text-sm mt-4">
+                        <span class="material-icons text-lg">logout</span>
+                        Sign Out
                     </button>
                 </div>
             </div>
@@ -158,8 +215,8 @@
                 <p class="text-xs font-bold truncate" id="display-user">John Doe</p>
             </div>
         </aside>
-        <!-- Products Area -->
-        <section class="glass rounded-3xl p-6 overflow-hidden flex flex-col">
+        <!-- Products Area (Checkout View) -->
+        <section id="viewCheckout" class="glass rounded-3xl p-6 overflow-hidden flex flex-col">
             <div class="flex justify-between items-center mb-6">
                 <input type="text" placeholder="Scan or search..."
                     class="w-80 bg-slate-800/50 border border-slate-700 rounded-xl py-3 px-5 focus:ring-2 focus:ring-amber-500 text-white outline-none">
@@ -172,6 +229,52 @@
 
             <div class="grid grid-cols-3 xl:grid-cols-4 gap-4 overflow-y-auto scrollbar-hide pr-2" id="product-grid">
                 <!-- Products -->
+            </div>
+        </section>
+
+        <!-- Inventory Area -->
+        <section id="viewInventory" class="glass rounded-3xl p-6 overflow-hidden flex flex-col hidden">
+            <div class="flex justify-between items-center mb-6">
+                <h2 class="text-2xl font-bold">Inventory Management</h2>
+                <button onclick="openAddProductModal()" class="px-6 py-2 gold-gradient rounded-xl font-bold">Add
+                    Product</button>
+            </div>
+            <div class="overflow-y-auto scrollbar-hide">
+                <table class="w-full text-left">
+                    <thead class="text-slate-500 text-xs uppercase tracking-widest border-b border-slate-700">
+                        <tr>
+                            <th class="py-4 px-2">Code</th>
+                            <th class="py-4 px-2">Product Name</th>
+                            <th class="py-4 px-2">Price (KES)</th>
+                            <th class="py-4 px-2">Stock</th>
+                            <th class="py-4 px-2">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="inventory-list"></tbody>
+                </table>
+            </div>
+        </section>
+
+        <!-- Analytics Area -->
+        <section id="viewAnalytics" class="glass rounded-3xl p-6 overflow-hidden flex flex-col hidden">
+            <h2 class="text-2xl font-bold mb-6">Sales Analytics</h2>
+            <div class="grid grid-cols-3 gap-6 mb-8">
+                <div class="bg-slate-800/50 p-6 rounded-3xl border border-slate-700">
+                    <p class="text-slate-500 text-xs font-bold uppercase mb-2">Total Revenue</p>
+                    <p id="statRevenue" class="text-3xl font-black text-amber-500">KES 0.00</p>
+                </div>
+                <div class="bg-slate-800/50 p-6 rounded-3xl border border-slate-700">
+                    <p class="text-slate-500 text-xs font-bold uppercase mb-2">Total Orders</p>
+                    <p id="statOrders" class="text-3xl font-black text-white">0</p>
+                </div>
+                <div class="bg-slate-800/50 p-6 rounded-3xl border border-slate-700">
+                    <p class="text-slate-500 text-xs font-bold uppercase mb-2">Success Rate</p>
+                    <p class="text-3xl font-black text-green-500">100%</p>
+                </div>
+            </div>
+            <div class="bg-slate-800/50 p-6 rounded-3xl border border-slate-700 flex-grow">
+                <h3 class="font-bold mb-4">Recent Transactions</h3>
+                <div id="analytics-recent-sales" class="space-y-3"></div>
             </div>
         </section>
 
@@ -205,13 +308,11 @@
         </aside>
     </main>
 
-    <!-- Unified Payment Modal -->
-    <div id="payment-modal"
-        class="fixed inset-0 bg-black/80 hidden flex items-center justify-center backdrop-blur-md z-50">
-        <div class="glass w-[450px] p-10 rounded-[2.5rem] border-amber-500/30">
-            <div id="payment-content" class="text-center">
-                <!-- Dynamic Content -->
-            </div>
+    <!-- Dynamic Modals Container -->
+    <div id="modal-container"
+        class="fixed inset-0 bg-black/80 hidden flex items-center justify-center backdrop-blur-md z-[100]">
+        <div id="modal-box" class="glass w-[500px] p-10 rounded-[2.5rem] border-amber-500/30">
+            <!-- Content Injected via JS -->
         </div>
     </div>
 

@@ -24,4 +24,17 @@ public class ProductController {
     public Product addProduct(@RequestBody Product product) {
         return productRepository.save(product);
     }
+
+    @PutMapping("/{id}")
+    public ResponseEntity<Product> updateProduct(@PathVariable Long id, @RequestBody Product productDetails) {
+        return productRepository.findById(id)
+                .map(product -> {
+                    product.setName(productDetails.getName());
+                    product.setPrice(productDetails.getPrice());
+                    product.setStockQuantity(productDetails.getStockQuantity());
+                    product.setCode(productDetails.getCode());
+                    return ResponseEntity.ok(productRepository.save(product));
+                })
+                .orElse(ResponseEntity.notFound().build());
+    }
 }

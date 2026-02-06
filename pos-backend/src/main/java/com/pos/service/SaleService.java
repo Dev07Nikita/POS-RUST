@@ -22,7 +22,7 @@ public class SaleService {
     public Sale processSale(Sale sale) {
         sale.setTransactionId(UUID.randomUUID().toString());
         sale.setTimestamp(LocalDateTime.now());
-        sale.setPaymentStatus("PENDING");
+        sale.setStatus("PENDING");
 
         // Update stock levels
         for (SaleItem item : sale.getItems()) {

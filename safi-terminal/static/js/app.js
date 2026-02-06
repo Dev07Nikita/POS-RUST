@@ -27,13 +27,33 @@ async function handleLogin() {
     const pass = document.getElementById('password').value;
     const error = document.getElementById('loginError');
 
-    // Simulated multi-profile auth
+    // In a real scenario, we call the Spring Boot /api/auth/login
+    // We can simulate the fetch to the backend if running
+    try {
+        const response = await fetch('http://localhost:8080/api/auth/login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username: user, password: pass })
+        });
+
+        if (response.ok) {
+            const data = await response.json();
+            state.user = {
+                name: data.fullName || data.username,
+                role: data.roles[0].name.replace('ROLE_', '')
+            };
+            init();
+            UI.loginOverlay.classList.add('hidden');
+            return;
+        }
+    } catch (e) {
+        console.warn("Backend not reached, using local fallback");
+    }
+
     const demoProfiles = {
         'admin': { name: 'Super Admin', role: 'ADMIN' },
         'manager': { name: 'Store Manager', role: 'MANAGER' },
-        'cashier': { name: 'Main Cashier', role: 'CASHIER' },
-        'logistics': { name: 'Logistics Lead', role: 'LOGISTICS' },
-        'sales': { name: 'Sales Rep', role: 'SALES' }
+        'cashier': { name: 'Main Cashier', role: 'CASHIER' }
     };
 
     if (demoProfiles[user] && pass === '1234') {
@@ -45,13 +65,228 @@ async function handleLogin() {
     }
 }
 
+function switchAuthState(state) {
+    const boxes = ['signInBox', 'signUpBox', 'forgotBox'];
+    boxes.forEach(id => document.getElementById(id).classList.add('hidden'));
+
+    if (state === 'login') document.getElementById('signInBox').classList.remove('hidden');
+    if (state === 'signup') document.getElementById('signUpBox').classList.remove('hidden');
+    if (state === 'forgot') document.getElementById('forgotBox').classList.remove('hidden');
+}
+
+async function handleSignUp() {
+    const username = document.getElementById('regUsername').value;
+    const email = document.getElementById('regEmail').value;
+    const password = document.getElementById('regPassword').value;
+    const role = document.getElementById('regRole').value;
+
+    try {
+        const response = await fetch('http://localhost:8080/api/auth/register', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username, email, password, role })
+        });
+        if (response.ok) {
+            alert("Registration successful! Please login.");
+            switchAuthState('login');
+        }
+    } catch (e) {
+        alert("Action failed. Ensure backend Hub is running on port 8080.");
+    }
+}
+
+async function handleForgotRequest() {
+    const email = document.getElementById('forgotEmail').value;
+    try {
+        const response = await fetch('http://localhost:8080/api/auth/forgot-password', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email })
+        });
+        if (response.ok) {
+            document.getElementById('forgotStep1').classList.add('hidden');
+            document.getElementById('forgotStep2').classList.remove('hidden');
+        }
+    } catch (e) {
+        alert("Check backend connectivity.");
+    }
+}
+async function handleResetPassword() {
+    const email = document.getElementById('forgotEmail').value;
+    const code = document.getElementById('resetCode').value;
+    const newPassword = document.getElementById('newPassword').value;
+
+    try {
+        const response = await fetch('http://localhost:8080/api/auth/reset-password', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email, code, newPassword })
+        });
+        if (response.ok) {
+            alert("Password updated! Log in now.");
+            switchAuthState('login');
+        }
+    } catch (e) {
+        alert("Reset failed.");
+    }
+}
+
 function init() {
     if (!state.user) return;
     UI.userDisplay.innerText = state.user.name;
     UI.cashierDisplay.innerText = state.user.name;
     UI.roleBadge.innerText = state.user.role;
     applyPermissions(state.user.role);
-    renderProducts();
+    switchView('checkout');
+    syncProductsFromHub();
+}
+
+async function syncProductsFromHub() {
+    try {
+        const response = await fetch('http://localhost:8080/api/products');
+        if (response.ok) {
+            state.products = await response.json();
+            renderProducts();
+        }
+    } catch (e) {
+        console.warn("Could not sync with Hub, using local state");
+        renderProducts();
+    }
+}
+
+function switchView(view) {
+    const views = ['viewCheckout', 'viewInventory', 'viewAnalytics'];
+    views.forEach(id => document.getElementById(id).classList.add('hidden'));
+
+    if (view === 'checkout') {
+        document.getElementById('viewCheckout').classList.remove('hidden');
+        renderProducts();
+    } else if (view === 'inventory') {
+        document.getElementById('viewInventory').classList.remove('hidden');
+        loadInventory();
+    } else if (view === 'analytics') {
+        document.getElementById('viewAnalytics').classList.remove('hidden');
+        loadAnalytics();
+    }
+}
+
+function handleLogout() {
+    if (confirm("Are you sure you want to sign out?")) {
+        state.user = null;
+        state.cart = [];
+        UI.loginOverlay.classList.remove('hidden');
+        switchAuthState('login');
+    }
+}
+
+async function loadInventory() {
+    await syncProductsFromHub();
+    const list = document.getElementById('inventory-list');
+    list.innerHTML = state.products.map(p => `
+        <tr class="border-b border-slate-800 hover:bg-white/5 transition">
+            <td class="py-4 px-2 font-mono text-xs text-amber-500">${p.code}</td>
+            <td class="py-4 px-2 font-bold">${p.name}</td>
+            <td class="py-4 px-2">KES ${p.price.toLocaleString()}</td>
+            <td class="py-4 px-2">${p.stockQuantity || p.stock || 0}</td>
+            <td class="py-4 px-2">
+                <button onclick="openEditProductModal(${p.id})" class="text-blue-400 hover:text-blue-300 mr-3">Edit</button>
+            </td>
+        </tr>
+    `).join('');
+}
+
+async function loadAnalytics() {
+    try {
+        const response = await fetch('http://localhost:8080/api/analytics/summary');
+        if (response.ok) {
+            const data = await response.json();
+            document.getElementById('statRevenue').innerText = `KES ${data.totalRevenue.toLocaleString()}`;
+            document.getElementById('statOrders').innerText = data.totalOrders;
+
+            const recent = document.getElementById('analytics-recent-sales');
+            recent.innerHTML = data.recentSales.map(s => `
+                <div class="flex justify-between items-center p-3 bg-slate-900/50 rounded-xl border border-slate-700">
+                    <div>
+                        <p class="text-xs font-bold">${s.transactionId.substring(0, 8)}...</p>
+                        <p class="text-[10px] text-slate-500">${new Date(s.timestamp).toLocaleTimeString()}</p>
+                    </div>
+                    <p class="font-black text-amber-500">KES ${s.totalAmount.toLocaleString()}</p>
+                </div>
+            `).join('');
+        }
+    } catch (e) {
+        alert("Analytics requires Backend connection.");
+    }
+}
+
+function openModal(content) {
+    document.getElementById('modal-box').innerHTML = content;
+    document.getElementById('modal-container').classList.remove('hidden');
+}
+
+function closeDynamicModal() {
+    document.getElementById('modal-container').classList.add('hidden');
+}
+
+function openAddProductModal() {
+    const html = `
+        <h2 class="text-2xl font-bold mb-6">Add New Product</h2>
+        <div class="space-y-4">
+            <input id="p-code" type="text" placeholder="Barcode/Code" class="w-full bg-slate-900 p-4 rounded-xl border border-slate-700">
+            <input id="p-name" type="text" placeholder="Product Name" class="w-full bg-slate-900 p-4 rounded-xl border border-slate-700">
+            <div class="grid grid-cols-2 gap-4">
+                <input id="p-price" type="number" placeholder="Price" class="w-full bg-slate-900 p-4 rounded-xl border border-slate-700">
+                <input id="p-stock" type="number" placeholder="Stock" class="w-full bg-slate-900 p-4 rounded-xl border border-slate-700">
+            </div>
+            <button onclick="saveProduct()" class="w-full py-4 gold-gradient rounded-xl font-bold text-lg">SAVE PRODUCT</button>
+            <button onclick="closeDynamicModal()" class="w-full text-slate-500 text-sm">Cancel</button>
+        </div>
+    `;
+    openModal(html);
+}
+
+function openEditProductModal(id) {
+    const p = state.products.find(x => x.id === id);
+    const html = `
+        <h2 class="text-2xl font-bold mb-6">Edit Product</h2>
+        <div class="space-y-4">
+            <input id="p-code" type="text" value="${p.code}" class="w-full bg-slate-900 p-4 rounded-xl border border-slate-700">
+            <input id="p-name" type="text" value="${p.name}" class="w-full bg-slate-900 p-4 rounded-xl border border-slate-700">
+            <div class="grid grid-cols-2 gap-4">
+                <input id="p-price" type="number" value="${p.price}" class="w-full bg-slate-900 p-4 rounded-xl border border-slate-700">
+                <input id="p-stock" type="number" value="${p.stockQuantity || p.stock || 0}" class="w-full bg-slate-900 p-4 rounded-xl border border-slate-700">
+            </div>
+            <button onclick="saveProduct(${id})" class="w-full py-4 gold-gradient rounded-xl font-bold text-lg">UPDATE PRODUCT</button>
+            <button onclick="closeDynamicModal()" class="w-full text-slate-500 text-sm">Cancel</button>
+        </div>
+    `;
+    openModal(html);
+}
+
+async function saveProduct(id = null) {
+    const product = {
+        code: document.getElementById('p-code').value,
+        name: document.getElementById('p-name').value,
+        price: parseFloat(document.getElementById('p-price').value),
+        stockQuantity: parseInt(document.getElementById('p-stock').value)
+    };
+
+    const url = id ? `http://localhost:8080/api/products/${id}` : 'http://localhost:8080/api/products';
+    const method = id ? 'PUT' : 'POST';
+
+    try {
+        const response = await fetch(url, {
+            method: method,
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(product)
+        });
+        if (response.ok) {
+            closeDynamicModal();
+            loadInventory();
+        }
+    } catch (e) {
+        alert("Failed to save product. Check Hub connection.");
+    }
 }
 
 function applyPermissions(role) {
@@ -77,7 +312,7 @@ function applyPermissions(role) {
 function renderProducts() {
     UI.grid.innerHTML = state.products.map(p => `
         <div onclick="addToCart(${p.id})" class="glass p-5 rounded-[2rem] cursor-pointer hover:border-amber-500/50 transition-all group relative overflow-hidden">
-            <div class="rust-badge absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity">STOCK: 12</div>
+            <div class="rust-badge absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity">STOCK: ${p.stockQuantity || p.stock || 0}</div>
             <div class="w-full aspect-square bg-slate-800 rounded-2xl mb-4 flex items-center justify-center text-slate-700 group-hover:scale-105 transition-transform font-bold text-6xl">
                 ${p.name[0]}
             </div>

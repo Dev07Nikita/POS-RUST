@@ -24,7 +24,7 @@ public class Sale {
 
     private String paymentMethod; // M-PESA, CASH, BANK
 
-    private String paymentStatus; // PENDING, COMPLETED, FAILED
+    private String status; // PENDING, SUCCESS, FAILED
 
     private String customerPhone; // For M-Pesa STK push
 
