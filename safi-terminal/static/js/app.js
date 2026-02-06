@@ -272,7 +272,8 @@ async function submitIssue() {
             throw new Error("Server rejected the message. (Status: " + response.status + ")");
         }
     } catch (e) {
-        alert("Failed to send: " + e.message + "\nEnsure Hub is running at 8080.");
+        console.error("Support Hub Fetch Error:", e);
+        alert("Failed to send: " + e.message + "\n1. Ensure Spring Hub is running on Port 8080\n2. Check for CORS blocking in browser console.");
     }
 }
 
