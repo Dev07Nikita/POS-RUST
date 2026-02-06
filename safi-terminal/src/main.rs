@@ -4,8 +4,6 @@ mod sync;
 use axum::{
     routing::{get, post},
     Json, Router,
-    body::Body,
-    http::StatusCode,
 };
 use serde::{Deserialize, Serialize};
 use sqlx::sqlite::SqlitePool;

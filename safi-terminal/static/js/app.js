@@ -27,8 +27,6 @@ async function handleLogin() {
     const pass = document.getElementById('password').value;
     const error = document.getElementById('loginError');
 
-    // In a real scenario, we call the Spring Boot /api/auth/login
-    // We can simulate the fetch to the backend if running
     try {
         const response = await fetch('http://localhost:8080/api/auth/login', {
             method: 'POST',
@@ -111,6 +109,7 @@ async function handleForgotRequest() {
         alert("Check backend connectivity.");
     }
 }
+
 async function handleResetPassword() {
     const email = document.getElementById('forgotEmail').value;
     const code = document.getElementById('resetCode').value;
@@ -155,15 +154,17 @@ async function syncProductsFromHub() {
 }
 
 function switchView(view) {
-    const views = ['viewCheckout', 'viewInventory', 'viewAnalytics'];
-    views.forEach(id => document.getElementById(id).classList.add('hidden'));
+    const views = ['viewCheckout', 'viewInventory', 'viewAnalytics', 'viewSupport'];
+    views.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.classList.add('hidden');
+    });
 
     if (view === 'checkout') {
         document.getElementById('viewCheckout').classList.remove('hidden');
         renderProducts();
     } else if (view === 'inventory') {
         document.getElementById('viewInventory').classList.remove('hidden');
-        // RBAC: Hide "Add Product" button for Cashiers
         const addBtn = document.querySelector('#viewInventory button');
         if (state.user.role === 'CASHIER') addBtn.classList.add('hidden');
         else addBtn.classList.remove('hidden');
@@ -262,15 +263,17 @@ async function submitIssue() {
         alert("Failed to send issue. Check Hub connection.");
     }
 }
-try {
-    const response = await fetch('http://localhost:8080/api/analytics/summary');
-    if (response.ok) {
-        const data = await response.json();
-        document.getElementById('statRevenue').innerText = `KES ${data.totalRevenue.toLocaleString()}`;
-        document.getElementById('statOrders').innerText = data.totalOrders;
 
-        const recent = document.getElementById('analytics-recent-sales');
-        recent.innerHTML = data.recentSales.map(s => `
+async function loadAnalytics() {
+    try {
+        const response = await fetch('http://localhost:8080/api/analytics/summary');
+        if (response.ok) {
+            const data = await response.json();
+            document.getElementById('statRevenue').innerText = `KES ${data.totalRevenue.toLocaleString()}`;
+            document.getElementById('statOrders').innerText = data.totalOrders;
+
+            const recent = document.getElementById('analytics-recent-sales');
+            recent.innerHTML = (data.recentSales || []).map(s => `
                 <div class="flex justify-between items-center p-3 bg-slate-900/50 rounded-xl border border-slate-700">
                     <div>
                         <p class="text-xs font-bold">${s.transactionId.substring(0, 8)}...</p>
@@ -279,19 +282,22 @@ try {
                     <p class="font-black text-amber-500">KES ${s.totalAmount.toLocaleString()}</p>
                 </div>
             `).join('');
+        }
+    } catch (e) {
+        console.warn("Analytics API failed.");
     }
-} catch (e) {
-    alert("Analytics requires Backend connection.");
-}
 }
 
 function openModal(content) {
-    document.getElementById('modal-box').innerHTML = content;
-    document.getElementById('modal-container').classList.remove('hidden');
+    const modalBox = document.getElementById('payment-content');
+    if (modalBox) {
+        modalBox.innerHTML = content;
+        UI.mpesaModal.classList.remove('hidden');
+    }
 }
 
-function closeDynamicModal() {
-    document.getElementById('modal-container').classList.add('hidden');
+function closeModal() {
+    UI.mpesaModal.classList.add('hidden');
 }
 
 function openAddProductModal() {
@@ -305,7 +311,7 @@ function openAddProductModal() {
                 <input id="p-stock" type="number" placeholder="Stock" class="w-full bg-slate-900 p-4 rounded-xl border border-slate-700">
             </div>
             <button onclick="saveProduct()" class="w-full py-4 gold-gradient rounded-xl font-bold text-lg">SAVE PRODUCT</button>
-            <button onclick="closeDynamicModal()" class="w-full text-slate-500 text-sm">Cancel</button>
+            <button onclick="closeModal()" class="w-full text-slate-500 text-sm mt-4">Cancel</button>
         </div>
     `;
     openModal(html);
@@ -323,7 +329,7 @@ function openEditProductModal(id) {
                 <input id="p-stock" type="number" value="${p.stockQuantity || p.stock || 0}" class="w-full bg-slate-900 p-4 rounded-xl border border-slate-700">
             </div>
             <button onclick="saveProduct(${id})" class="w-full py-4 gold-gradient rounded-xl font-bold text-lg">UPDATE PRODUCT</button>
-            <button onclick="closeDynamicModal()" class="w-full text-slate-500 text-sm">Cancel</button>
+            <button onclick="closeModal()" class="w-full text-slate-500 text-sm mt-4">Cancel</button>
         </div>
     `;
     openModal(html);
@@ -347,7 +353,7 @@ async function saveProduct(id = null) {
             body: JSON.stringify(product)
         });
         if (response.ok) {
-            closeDynamicModal();
+            closeModal();
             loadInventory();
         }
     } catch (e) {
@@ -364,14 +370,14 @@ function applyPermissions(role) {
         'SALES': ['menuReports']
     };
 
-    // Hide all
     ['menuInventory', 'menuReports', 'menuLogistics', 'menuAdmin'].forEach(id => {
-        document.getElementById(id).classList.add('hidden');
+        const el = document.getElementById(id);
+        if (el) el.classList.add('hidden');
     });
 
-    // Show allowed
     (permissions[role] || []).forEach(id => {
-        document.getElementById(id).classList.remove('hidden');
+        const el = document.getElementById(id);
+        if (el) el.classList.remove('hidden');
     });
 }
 
@@ -393,6 +399,11 @@ function addToCart(pid) {
     const existing = state.cart.find(i => i.id === pid);
     if (existing) existing.quantity++;
     else state.cart.push({ ...product, quantity: 1 });
+    renderCart();
+}
+
+function removeFromCart(pid) {
+    state.cart = state.cart.filter(i => i.id !== pid);
     renderCart();
 }
 
@@ -424,6 +435,7 @@ function openPaymentModal(method) {
             <p class="text-slate-400 text-sm mb-8">Ready to send prompt to customer phone</p>
             <input id="pay-phone" type="text" placeholder="07XX XXX XXX" class="w-full bg-slate-800 border-2 border-slate-700 rounded-2xl py-5 px-6 mb-6 text-center text-2xl font-black tracking-widest outline-none focus:border-amber-500">
             <button onclick="triggerPayment('M-PESA')" class="w-full py-5 gold-gradient rounded-2xl font-black text-lg">SEND PUSH</button>
+            <button onclick="closeModal()" class="mt-4 text-slate-500 text-sm">Cancel</button>
         `;
     } else {
         content = `
@@ -431,32 +443,66 @@ function openPaymentModal(method) {
             <h3 class="text-2xl font-black mb-1">${method} BANK</h3>
             <p class="text-slate-400 text-sm mb-8">Process merchant bank payment</p>
             <button onclick="triggerPayment('${method}')" class="w-full py-5 gold-gradient rounded-2xl font-black text-lg">AUTHORIZE</button>
+            <button onclick="closeModal()" class="mt-4 text-slate-500 text-sm">Cancel</button>
         `;
     }
 
-    document.getElementById('payment-content').innerHTML = content + `<button onclick="closeModal()" class="mt-4 text-slate-500 text-sm">Cancel</button>`;
-    UI.mpesaModal.classList.remove('hidden');
+    openModal(content);
 }
 
-function closeModal() { UI.mpesaModal.classList.add('hidden'); }
-
 async function triggerPayment(method) {
-    const total = state.cart.reduce((s, i) => s + (i.price * i.quantity), 0);
+    if (state.cart.length === 0) return alert("Cart is empty");
+
     const sale = {
         items: state.cart.map(i => ({ product_id: i.id, quantity: i.quantity })),
         payment_method: method,
-        cashier_name: state.cashier
+        cashier_name: state.user ? state.user.name : "Anonymous"
     };
 
-    // Call Rust Terminal API
-    const response = await fetch('/api/checkout', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(sale)
-    });
+    try {
+        const response = await fetch('/api/checkout', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(sale)
+        });
 
-    const result = await response.json();
-    showReceipt(result.qr_code);
+        if (!response.ok) throw new Error("Payment failed at terminal");
+
+        const result = await response.json();
+        showReceipt(result.qr_code);
+    } catch (e) {
+        alert("Transaction Failed: " + e.message);
+    }
+}
+
+function processCash() {
+    if (state.cart.length === 0) return alert("Cart is empty");
+
+    const total = state.cart.reduce((s, i) => s + (i.price * i.quantity), 0);
+    const content = `
+        <div class="w-20 h-20 bg-amber-500 rounded-2xl mx-auto mb-6 flex items-center justify-center text-white text-4xl font-black">C</div>
+        <h3 class="text-2xl font-black mb-1">Cash Payment</h3>
+        <p class="text-slate-400 text-sm mb-4">Total Amount: <strong>KES ${total.toLocaleString()}</strong></p>
+        <div class="space-y-4 mb-6">
+            <input id="cash-received" type="number" placeholder="Amount Received" 
+                class="w-full bg-slate-800 border-2 border-slate-700 rounded-2xl py-4 px-6 text-2xl font-black text-center outline-none focus:border-amber-500"
+                oninput="calculateChange(${total})">
+            <div class="text-center">
+                <p class="text-xs text-slate-500 uppercase font-bold">Change to Return</p>
+                <p id="cash-change" class="text-2xl font-black text-green-500">KES 0.00</p>
+            </div>
+        </div>
+        <button onclick="triggerPayment('CASH')" class="w-full py-5 gold-gradient rounded-2xl font-black text-lg shadow-xl shadow-amber-900/40">COMPLETE SALE</button>
+        <button onclick="closeModal()" class="mt-4 text-slate-500 text-sm w-full">Cancel</button>
+    `;
+
+    openModal(content);
+}
+
+function calculateChange(total) {
+    const received = parseFloat(document.getElementById('cash-received').value) || 0;
+    const change = Math.max(0, received - total);
+    document.getElementById('cash-change').innerText = `KES ${change.toLocaleString()}`;
 }
 
 function showReceipt(qr) {
