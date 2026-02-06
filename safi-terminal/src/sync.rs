@@ -21,12 +21,31 @@ pub async fn start_sync_worker(pool: SqlitePool, backend_url: String) {
                 let payment_method: String = row.get("payment_method");
                 let cashier: String = row.get("cashier");
 
+                // Fetch items for this sale
+                let items = sqlx::query("SELECT product_name, quantity, unit_price FROM sale_items WHERE sale_id = ?")
+                    .bind(&id)
+                    .fetch_all(&pool)
+                    .await
+                    .unwrap_or_default();
+
+                let sale_items: Vec<serde_json::Value> = items.iter().map(|item_row| {
+                    let qty: i64 = item_row.get("quantity");
+                    let price: f64 = item_row.get("unit_price");
+                    json!({
+                        "productName": item_row.get::<String, _>("product_name"),
+                        "quantity": qty,
+                        "unitPrice": price,
+                        "subtotal": (qty as f64) * price
+                    })
+                }).collect();
+
                 let sale_data = json!({
                     "transactionId": id,
                     "timestamp": timestamp,
                     "totalAmount": total,
                     "paymentMethod": payment_method,
-                    "cashierName": cashier
+                    "cashierName": cashier,
+                    "items": sale_items
                 });
 
                 match client.post(&format!("{}/api/sales/sync", backend_url))

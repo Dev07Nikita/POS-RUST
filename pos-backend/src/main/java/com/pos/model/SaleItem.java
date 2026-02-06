@@ -18,6 +18,7 @@ public class SaleItem {
     @JoinColumn(name = "product_id")
     private Product product;
 
+    private String productName; // Snapshot name for easy display
     private Integer quantity;
     private Double unitPrice;
     private Double subtotal;

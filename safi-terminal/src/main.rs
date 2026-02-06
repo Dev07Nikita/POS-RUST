@@ -45,13 +45,21 @@ struct SaleItem {
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let pool = SqlitePool::connect("sqlite:safi_terminal.db?mode=rwc").await?;
     
+    // Initialize Tables
+    sqlx::query("CREATE TABLE IF NOT EXISTS products (id INTEGER PRIMARY KEY, code TEXT, name TEXT, price REAL, stock INTEGER)")
+        .execute(&pool).await?;
+    sqlx::query("CREATE TABLE IF NOT EXISTS sales (id TEXT PRIMARY KEY, timestamp TEXT, total REAL, payment_method TEXT, cashier TEXT, synced INTEGER DEFAULT 0)")
+        .execute(&pool).await?;
+    sqlx::query("CREATE TABLE IF NOT EXISTS sale_items (id INTEGER PRIMARY KEY AUTOINCREMENT, sale_id TEXT, product_name TEXT, quantity INTEGER, unit_price REAL)")
+        .execute(&pool).await?;
+
     // Start background sync to Spring Boot
     start_sync_worker(pool.clone(), "http://localhost:8080".to_string()).await;
 
     let app = Router::new()
         .route("/api/products", get(list_products))
         .route("/api/checkout", post(checkout))
-        .fallback_service(ServeDir::new("static")) // Serve the frontend
+        .fallback_service(ServeDir::new("static"))
         .layer(CorsLayer::permissive())
         .with_state(pool);
 
@@ -80,19 +88,56 @@ async fn checkout(
     let sale_id = Uuid::new_v4().to_string();
     let timestamp = Utc::now().to_rfc3339();
     
-    // In a real app, we'd calculate total and update stock here
-    
+    let mut receipt_items = Vec::new();
+    let mut total_amount = 0.0;
+
+    for item in &payload.items {
+        // Fetch product details
+        if let Ok(p) = sqlx::query_as::<_, Product>("SELECT id, code, name, price, stock FROM products WHERE id = ?")
+            .bind(item.product_id)
+            .fetch_one(&pool)
+            .await 
+        {
+            let subtotal = p.price * item.quantity as f64;
+            total_amount += subtotal;
+
+            receipt_items.push(crate::receipt::ReceiptItem {
+                name: p.name.clone(),
+                quantity: item.quantity,
+                price: p.price,
+            });
+
+            // Store sale item
+            sqlx::query("INSERT INTO sale_items (sale_id, product_name, quantity, unit_price) VALUES (?, ?, ?, ?)")
+                .bind(&sale_id)
+                .bind(&p.name)
+                .bind(item.quantity)
+                .bind(p.price)
+                .execute(&pool)
+                .await
+                .ok();
+            
+            // Update local stock
+            sqlx::query("UPDATE products SET stock = stock - ? WHERE id = ?")
+                .bind(item.quantity)
+                .bind(item.product_id)
+                .execute(&pool)
+                .await
+                .ok();
+        }
+    }
+
     sqlx::query("INSERT INTO sales (id, timestamp, total, payment_method, cashier) VALUES (?, ?, ?, ?, ?)")
         .bind(&sale_id)
         .bind(&timestamp)
-        .bind(0.0)
+        .bind(total_amount)
         .bind(&payload.payment_method)
         .bind(&payload.cashier_name)
         .execute(&pool)
         .await
         .ok();
 
-    let qr_base64 = generate_receipt_qr(&sale_id);
+    let qr_base64 = generate_receipt_qr(&sale_id, &payload.cashier_name, total_amount, &receipt_items);
 
     Json(serde_json::json!({
         "status": "success",
