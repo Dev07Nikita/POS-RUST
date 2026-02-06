@@ -28,7 +28,7 @@ public class Sale {
 
     private String customerPhone; // For M-Pesa STK push
 
-    @OneToMany(cascade = CascadeType.ALL)
+    @OneToMany(cascade = CascadeType.ALL, fetch = FetchType.EAGER)
     @JoinColumn(name = "sale_id")
     private List<SaleItem> items;
 }

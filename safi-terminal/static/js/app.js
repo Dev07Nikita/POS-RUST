@@ -274,12 +274,25 @@ async function loadAnalytics() {
 
             const recent = document.getElementById('analytics-recent-sales');
             recent.innerHTML = (data.recentSales || []).map(s => `
-                <div class="flex justify-between items-center p-3 bg-slate-900/50 rounded-xl border border-slate-700">
-                    <div>
-                        <p class="text-xs font-bold">${s.transactionId.substring(0, 8)}...</p>
-                        <p class="text-[10px] text-slate-500">${new Date(s.timestamp).toLocaleTimeString()}</p>
+                <div class="p-4 bg-slate-900/50 rounded-2xl border border-slate-700 space-y-3">
+                    <div class="flex justify-between items-center pb-2 border-b border-slate-800">
+                        <div>
+                            <p class="text-xs font-black text-amber-500">${s.transactionId.substring(0, 8)}...</p>
+                            <p class="text-[10px] text-slate-500">${new Date(s.timestamp).toLocaleString()}</p>
+                        </div>
+                        <div class="text-right">
+                            <p class="font-black text-lg">KES ${s.totalAmount.toLocaleString()}</p>
+                            <p class="text-[9px] text-slate-400 uppercase font-bold">Via ${s.paymentMethod || 'CASH'}</p>
+                        </div>
                     </div>
-                    <p class="font-black text-amber-500">KES ${s.totalAmount.toLocaleString()}</p>
+                    <div class="space-y-1">
+                        ${(s.items || []).map(item => `
+                            <div class="flex justify-between text-[10px]">
+                                <span class="text-slate-300">${item.productName || 'Item'} x ${item.quantity}</span>
+                                <span class="text-slate-500">KES ${(item.subtotal || 0).toLocaleString()}</span>
+                            </div>
+                        `).join('')}
+                    </div>
                 </div>
             `).join('');
         }
