@@ -25,4 +25,8 @@ public class Sale {
 
     private String paymentReference; // Bank ref or M-Pesa receipt no.
     private String status; // PENDING, SUCCESS, FAILED
+
+    @OneToMany(cascade = CascadeType.ALL, fetch = FetchType.LAZY)
+    @JoinColumn(name = "sale_id")
+    private java.util.List<SaleItem> items;
 }
