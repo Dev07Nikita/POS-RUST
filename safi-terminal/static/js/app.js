@@ -163,15 +163,31 @@ function switchView(view) {
         renderProducts();
     } else if (view === 'inventory') {
         document.getElementById('viewInventory').classList.remove('hidden');
+        // RBAC: Hide "Add Product" button for Cashiers
+        const addBtn = document.querySelector('#viewInventory button');
+        if (state.user.role === 'CASHIER') addBtn.classList.add('hidden');
+        else addBtn.classList.remove('hidden');
         loadInventory();
     } else if (view === 'analytics') {
         document.getElementById('viewAnalytics').classList.remove('hidden');
         loadAnalytics();
+    } else if (view === 'support') {
+        document.getElementById('viewSupport').classList.remove('hidden');
+        loadIssues();
     }
 }
 
-function handleLogout() {
+async function handleLogout() {
     if (confirm("Are you sure you want to sign out?")) {
+        try {
+            await fetch('http://localhost:8080/api/auth/logout', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username: state.user.name })
+            });
+        } catch (e) {
+            console.warn("Logout not synced to Hub.");
+        }
         state.user = null;
         state.cart = [];
         UI.loginOverlay.classList.remove('hidden');
@@ -189,22 +205,72 @@ async function loadInventory() {
             <td class="py-4 px-2">KES ${p.price.toLocaleString()}</td>
             <td class="py-4 px-2">${p.stockQuantity || p.stock || 0}</td>
             <td class="py-4 px-2">
-                <button onclick="openEditProductModal(${p.id})" class="text-blue-400 hover:text-blue-300 mr-3">Edit</button>
+                ${state.user.role !== 'CASHIER' ? `<button onclick="openEditProductModal(${p.id})" class="text-blue-400 hover:text-blue-300 mr-3">Edit</button>` : '<span class="text-slate-500 italic text-xs">View Only</span>'}
             </td>
         </tr>
     `).join('');
 }
 
-async function loadAnalytics() {
+async function loadIssues() {
     try {
-        const response = await fetch('http://localhost:8080/api/analytics/summary');
+        const response = await fetch('http://localhost:8080/api/support');
         if (response.ok) {
-            const data = await response.json();
-            document.getElementById('statRevenue').innerText = `KES ${data.totalRevenue.toLocaleString()}`;
-            document.getElementById('statOrders').innerText = data.totalOrders;
+            const issues = await response.json();
+            const container = document.getElementById('support-messages');
+            container.innerHTML = `
+                <div class="flex justify-start">
+                    <div class="bg-slate-800 p-4 rounded-2xl rounded-tl-none max-w-[80%]">
+                        <p class="text-[10px] font-black text-amber-500 uppercase mb-1">System Assistant</p>
+                        <p class="text-sm">Welcome to the Safi Support Hub. Please describe any issues or requests for your department below.</p>
+                    </div>
+                </div>
+            ` + issues.map(issue => `
+                <div class="flex ${issue.department === state.user.role ? 'justify-end' : 'justify-start'}">
+                    <div class="${issue.department === state.user.role ? 'bg-amber-500 text-slate-900' : 'bg-slate-800 text-white'} p-4 rounded-2xl ${issue.department === state.user.role ? 'rounded-tr-none' : 'rounded-tl-none'} max-w-[80%]">
+                        <p class="text-[10px] font-black ${issue.department === state.user.role ? 'text-slate-800/50' : 'text-amber-500'} uppercase mb-1">${issue.department}</p>
+                        <p class="text-sm">${issue.message}</p>
+                        <p class="text-[8px] mt-1 opacity-50">${new Date(issue.timestamp).toLocaleTimeString()}</p>
+                    </div>
+                </div>
+            `).join('');
+            container.scrollTop = container.scrollHeight;
+        }
+    } catch (e) {
+        console.warn("Support API failed.");
+    }
+}
 
-            const recent = document.getElementById('analytics-recent-sales');
-            recent.innerHTML = data.recentSales.map(s => `
+async function submitIssue() {
+    const input = document.getElementById('supportInput');
+    const message = input.value.trim();
+    if (!message) return;
+
+    try {
+        const response = await fetch('http://localhost:8080/api/support', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                department: state.user.role,
+                message: message
+            })
+        });
+        if (response.ok) {
+            input.value = '';
+            loadIssues();
+        }
+    } catch (e) {
+        alert("Failed to send issue. Check Hub connection.");
+    }
+}
+try {
+    const response = await fetch('http://localhost:8080/api/analytics/summary');
+    if (response.ok) {
+        const data = await response.json();
+        document.getElementById('statRevenue').innerText = `KES ${data.totalRevenue.toLocaleString()}`;
+        document.getElementById('statOrders').innerText = data.totalOrders;
+
+        const recent = document.getElementById('analytics-recent-sales');
+        recent.innerHTML = data.recentSales.map(s => `
                 <div class="flex justify-between items-center p-3 bg-slate-900/50 rounded-xl border border-slate-700">
                     <div>
                         <p class="text-xs font-bold">${s.transactionId.substring(0, 8)}...</p>
@@ -213,10 +279,10 @@ async function loadAnalytics() {
                     <p class="font-black text-amber-500">KES ${s.totalAmount.toLocaleString()}</p>
                 </div>
             `).join('');
-        }
-    } catch (e) {
-        alert("Analytics requires Backend connection.");
     }
+} catch (e) {
+    alert("Analytics requires Backend connection.");
+}
 }
 
 function openModal(content) {
