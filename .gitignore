@@ -1,4 +1,4 @@
-# Build Artifacts
+/pos-backend/target/
 /pos-backend/build/
 /pos-backend/.gradle/
 /pos-backend/.mvn/wrapper/maven-wrapper.jar
