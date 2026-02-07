@@ -32,6 +32,7 @@ struct Sale {
     items: Vec<SaleItem>,
     payment_method: String,
     cashier_name: String,
+    customer_phone: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -48,7 +49,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Initialize Tables
     sqlx::query("CREATE TABLE IF NOT EXISTS products (id INTEGER PRIMARY KEY, code TEXT, name TEXT, price REAL, stock INTEGER)")
         .execute(&pool).await?;
-    sqlx::query("CREATE TABLE IF NOT EXISTS sales (id TEXT PRIMARY KEY, timestamp TEXT, total REAL, payment_method TEXT, cashier TEXT, synced INTEGER DEFAULT 0)")
+    sqlx::query("CREATE TABLE IF NOT EXISTS sales (id TEXT PRIMARY KEY, timestamp TEXT, total REAL, payment_method TEXT, cashier TEXT, customer_phone TEXT, synced INTEGER DEFAULT 0)")
         .execute(&pool).await?;
     sqlx::query("CREATE TABLE IF NOT EXISTS sale_items (id INTEGER PRIMARY KEY AUTOINCREMENT, sale_id TEXT, product_name TEXT, quantity INTEGER, unit_price REAL)")
         .execute(&pool).await?;
@@ -127,12 +128,13 @@ async fn checkout(
         }
     }
 
-    sqlx::query("INSERT INTO sales (id, timestamp, total, payment_method, cashier) VALUES (?, ?, ?, ?, ?)")
+    sqlx::query("INSERT INTO sales (id, timestamp, total, payment_method, cashier, customer_phone) VALUES (?, ?, ?, ?, ?, ?)")
         .bind(&sale_id)
         .bind(&timestamp)
         .bind(total_amount)
         .bind(&payload.payment_method)
         .bind(&payload.cashier_name)
+        .bind(&payload.customer_phone)
         .execute(&pool)
         .await
         .ok();

@@ -456,12 +456,24 @@ function openPaymentModal(method) {
     let content = "";
     if (method === 'M-PESA') {
         content = `
-            <div class="w-20 h-20 bg-green-500 rounded-2xl mx-auto mb-6 flex items-center justify-center text-white text-4xl font-black">M</div>
-            <h3 class="text-2xl font-black mb-1">M-Pesa STK Push</h3>
-            <p class="text-slate-400 text-sm mb-8">Ready to send prompt to customer phone</p>
-            <input id="pay-phone" type="text" placeholder="07XX XXX XXX" class="w-full bg-slate-800 border-2 border-slate-700 rounded-2xl py-5 px-6 mb-6 text-center text-2xl font-black tracking-widest outline-none focus:border-amber-500">
-            <button onclick="triggerPayment('M-PESA')" class="w-full py-5 gold-gradient rounded-2xl font-black text-lg">SEND PUSH</button>
-            <button onclick="closeModal()" class="mt-4 text-slate-500 text-sm">Cancel</button>
+            <div class="w-20 h-20 bg-green-600 rounded-3xl mx-auto mb-6 flex items-center justify-center text-white text-4xl font-black shadow-lg shadow-green-900/40">M</div>
+            <h3 class="text-3xl font-black mb-2 text-white">M-Pesa Payments</h3>
+            <p class="text-slate-400 text-sm mb-8">Select your preferred M-Pesa module</p>
+            
+            <div class="grid grid-cols-2 gap-4 mb-6">
+                <button onclick="setMpesaMode('STK')" class="p-4 glass rounded-2xl border-green-500/30 hover:bg-green-500/10 text-sm font-bold">STK PUSH</button>
+                <button onclick="setMpesaMode('C2B')" class="p-4 glass rounded-2xl border-blue-500/30 hover:bg-blue-500/10 text-sm font-bold">PAYBILL/TILL</button>
+                <button onclick="setMpesaMode('SEND')" class="p-4 glass rounded-2xl border-amber-500/30 hover:bg-amber-500/10 text-sm font-bold">SEND MONEY</button>
+                <button onclick="setMpesaMode('QR')" class="p-4 glass rounded-2xl border-slate-500/30 hover:bg-slate-500/10 text-sm font-bold">MPESA QR</button>
+            </div>
+
+            <div id="mpesa-module-content" class="animate-in fade-in zoom-in duration-300">
+                <!-- Initial view is STK -->
+                <input id="pay-phone" type="text" placeholder="07XX XXX XXX" class="w-full bg-slate-800 border-2 border-slate-700 rounded-2xl py-4 px-6 mb-4 text-center text-xl font-bold tracking-widest outline-none focus:border-green-500">
+                <button onclick="triggerPayment('M-PESA STK')" class="w-full py-5 gold-gradient rounded-2xl font-black text-lg">SEND STK PROMPT</button>
+            </div>
+            
+            <button onclick="closeModal()" class="mt-6 text-slate-500 text-sm hover:text-slate-300">Cancel Payment</button>
         `;
     } else {
         content = `
@@ -476,12 +488,37 @@ function openPaymentModal(method) {
     openModal(content);
 }
 
+function setMpesaMode(mode) {
+    const container = document.getElementById('mpesa-module-content');
+    if (mode === 'STK') {
+        container.innerHTML = `
+            <input id="pay-phone" type="text" placeholder="07XX XXX XXX" class="w-full bg-slate-800 border-2 border-slate-700 rounded-2xl py-4 px-6 mb-4 text-center text-xl font-bold tracking-widest outline-none focus:border-green-500">
+            <button onclick="triggerPayment('M-PESA STK')" class="w-full py-5 gold-gradient rounded-2xl font-black text-lg">SEND STK PROMPT</button>
+        `;
+    } else if (mode === 'C2B') {
+        container.innerHTML = `
+            <div class="bg-slate-900/50 p-6 rounded-3xl border border-slate-700 mb-6 text-left">
+                <p class="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">Instructions</p>
+                <p class="text-sm text-slate-300 leading-relaxed">1. Go to M-Pesa Menu<br>2. Lipa na M-Pesa<br>3. Enter <strong>Paybill: 174379</strong><br>4. Enter Amount & PIN</p>
+            </div>
+            <button onclick="triggerPayment('M-PESA C2B')" class="w-full py-5 glass border-blue-500/50 rounded-2xl font-black text-lg text-blue-400">FINALIZE AFTER PAYMENT</button>
+        `;
+    } else if (mode === 'SEND') {
+        container.innerHTML = `
+            <input id="pay-phone" type="text" placeholder="Recipient Number" class="w-full bg-slate-800 border-2 border-slate-700 rounded-2xl py-4 px-6 mb-4 text-center text-xl font-bold tracking-widest outline-none focus:border-amber-500">
+            <button onclick="triggerPayment('M-PESA SEND')" class="w-full py-5 glass border-amber-500/50 rounded-2xl font-black text-lg text-amber-500">SEND MONEY TO PHONE</button>
+        `;
+    }
+}
+
 async function triggerPayment(method) {
     if (state.cart.length === 0) return alert("Cart is empty");
 
+    const phoneEl = document.getElementById('pay-phone');
     const sale = {
         items: state.cart.map(i => ({ product_id: i.id, quantity: i.quantity })),
         payment_method: method,
+        customer_phone: phoneEl ? phoneEl.value.trim() : null,
         cashier_name: state.user ? state.user.name : "Anonymous"
     };
 
@@ -496,6 +533,8 @@ async function triggerPayment(method) {
 
         const result = await response.json();
         showReceipt(result.qr_code);
+        state.cart = [];
+        renderCart();
     } catch (e) {
         alert("Transaction Failed: " + e.message);
     }

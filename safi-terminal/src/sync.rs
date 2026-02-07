@@ -8,7 +8,7 @@ pub async fn start_sync_worker(pool: SqlitePool, backend_url: String) {
     tokio::spawn(async move {
         loop {
             // Find unsynced sales
-            let unsynced = sqlx::query("SELECT id, timestamp, total, payment_method, cashier FROM sales WHERE synced = 0")
+            let unsynced = sqlx::query("SELECT id, timestamp, total, payment_method, cashier, customer_phone FROM sales WHERE synced = 0")
                 .fetch_all(&pool)
                 .await
                 .unwrap_or_default();
@@ -20,6 +20,7 @@ pub async fn start_sync_worker(pool: SqlitePool, backend_url: String) {
                 let total: f64 = row.get("total");
                 let payment_method: String = row.get("payment_method");
                 let cashier: String = row.get("cashier");
+                let customer_phone: Option<String> = row.get("customer_phone");
 
                 // Fetch items for this sale
                 let items = sqlx::query("SELECT product_name, quantity, unit_price FROM sale_items WHERE sale_id = ?")
@@ -45,6 +46,7 @@ pub async fn start_sync_worker(pool: SqlitePool, backend_url: String) {
                     "totalAmount": total,
                     "paymentMethod": payment_method,
                     "cashierName": cashier,
+                    "customerPhone": customer_phone,
                     "items": sale_items
                 });
 

@@ -8,11 +8,13 @@ import org.springframework.stereotype.Service;
 @Slf4j
 public class PaymentGateway {
 
+    private final MpesaService mpesaService;
+
     public void processPayment(Sale sale) {
         log.info("Orchestrating {} payment for {} KES", sale.getPaymentMethod(), sale.getTotalAmount());
 
         switch (sale.getPaymentMethod().toUpperCase()) {
-            case "M-PESA" -> triggerMpesa(sale);
+            case "M-PESA", "M-PESA STK" -> triggerMpesa(sale);
             case "KCB" -> triggerKcb(sale);
             case "EQUITY" -> triggerEquity(sale);
             case "CASH" -> finalizeCash(sale);
@@ -21,8 +23,8 @@ public class PaymentGateway {
     }
 
     private void triggerMpesa(Sale sale) {
-        log.info("Sending STK Push to customer...");
-        // Daraja integration logic
+        log.info("Sending STK Push to customer: {}", sale.getCustomerPhone());
+        mpesaService.triggerStkPush(sale.getCustomerPhone(), sale.getTotalAmount(), sale.getTransactionId());
     }
 
     private void triggerKcb(Sale sale) {
