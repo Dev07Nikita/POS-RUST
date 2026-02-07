@@ -138,6 +138,34 @@ function init() {
     applyPermissions(state.user.role);
     switchView('checkout');
     syncProductsFromHub();
+
+    // Fast Billing: Barcode & Hotkeys
+    let barcodeBuffer = "";
+    let lastKeyTime = Date.now();
+
+    document.addEventListener('keydown', (e) => {
+        if (state.view !== 'checkout') return;
+
+        // Hotkeys
+        if (e.key === 'F9') { e.preventDefault(); openPaymentModal('M-PESA'); }
+        if (e.key === 'F10') { e.preventDefault(); processCash(); }
+        if (e.key === 'Escape') { closeModal(); closeReceipt(); }
+
+        // Barcode Listener
+        const now = Date.now();
+        if (now - lastKeyTime > 100) barcodeBuffer = "";
+        lastKeyTime = now;
+
+        if (e.key === 'Enter') {
+            if (barcodeBuffer.length >= 3) {
+                const p = state.products.find(item => item.code === barcodeBuffer);
+                if (p) addToCart(p.id);
+            }
+            barcodeBuffer = "";
+        } else if (/^\d$/.test(e.key)) {
+            barcodeBuffer += e.key;
+        }
+    });
 }
 
 async function syncProductsFromHub() {
@@ -199,17 +227,25 @@ async function handleLogout() {
 async function loadInventory() {
     await syncProductsFromHub();
     const list = document.getElementById('inventory-list');
-    list.innerHTML = state.products.map(p => `
-        <tr class="border-b border-slate-800 hover:bg-white/5 transition">
-            <td class="py-4 px-2 font-mono text-xs text-amber-500">${p.code}</td>
-            <td class="py-4 px-2 font-bold">${p.name}</td>
-            <td class="py-4 px-2">KES ${p.price.toLocaleString()}</td>
-            <td class="py-4 px-2">${p.stockQuantity || p.stock || 0}</td>
-            <td class="py-4 px-2">
-                ${state.user.role !== 'CASHIER' ? `<button onclick="openEditProductModal(${p.id})" class="text-blue-400 hover:text-blue-300 mr-3">Edit</button>` : '<span class="text-slate-500 italic text-xs">View Only</span>'}
-            </td>
-        </tr>
-    `).join('');
+    list.innerHTML = state.products.map(p => {
+        const stock = p.stockQuantity || p.stock || 0;
+        const lowStock = stock <= 5;
+        return `
+            <tr class="border-b border-slate-800 hover:bg-white/5 transition ${lowStock ? 'bg-red-500/5' : ''}">
+                <td class="py-4 px-2 font-mono text-xs text-amber-500">${p.code}</td>
+                <td class="py-4 px-2 font-bold">${p.name}</td>
+                <td class="py-4 px-2">KES ${p.price.toLocaleString()}</td>
+                <td class="py-4 px-2">
+                    <span class="${lowStock ? 'bg-red-500 text-white px-2 py-1 rounded-md font-black animate-pulse text-[10px]' : 'font-bold'}">
+                        ${stock} ${lowStock ? 'LOW' : ''}
+                    </span>
+                </td>
+                <td class="py-4 px-2">
+                    ${state.user.role !== 'CASHIER' ? `<button onclick="openEditProductModal(${p.id})" class="text-blue-400 hover:text-blue-300 mr-3">Edit</button>` : '<span class="text-slate-500 italic text-xs">View Only</span>'}
+                </td>
+            </tr>
+        `;
+    }).join('');
 }
 
 async function loadIssues() {
@@ -409,8 +445,10 @@ function applyPermissions(role) {
 
 function renderProducts() {
     UI.grid.innerHTML = state.products.map(p => `
-        <div onclick="addToCart(${p.id})" class="glass p-5 rounded-[2rem] cursor-pointer hover:border-amber-500/50 transition-all group relative overflow-hidden">
-            <div class="rust-badge absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity">STOCK: ${p.stockQuantity || p.stock || 0}</div>
+        <div onclick="addToCart(${p.id})" class="glass p-5 rounded-[2rem] cursor-pointer hover:border-amber-500/50 transition-all group relative overflow-hidden ${p.stock <= 5 ? 'border-red-500/30 ring-1 ring-red-500/20' : ''}">
+            <div class="rust-badge absolute top-4 right-4 ${p.stock <= 5 ? 'bg-red-500 text-white animate-pulse' : ''} transition-opacity">
+                ${p.stock <= 5 ? 'LOW STOCK: ' : 'STOCK: '}${p.stockQuantity || p.stock || 0}
+            </div>
             <div class="w-full aspect-square bg-slate-800 rounded-2xl mb-4 flex items-center justify-center text-slate-700 group-hover:scale-105 transition-transform font-bold text-6xl">
                 ${p.name[0]}
             </div>
@@ -592,6 +630,63 @@ function closeReceipt() {
     UI.receiptModal.classList.add('hidden');
     state.cart = [];
     renderCart();
+}
+
+function generateSalesReport() {
+    const totalRevenue = document.getElementById('statRevenue').innerText;
+    const totalOrders = document.getElementById('statOrders').innerText;
+
+    let reportContent = `
+        <html>
+        <head>
+            <title>Safi POS - Daily Sales Report</title>
+            <style>
+                body { font-family: 'Inter', sans-serif; padding: 40px; color: #0f172a; line-height: 1.5; }
+                .header { border-bottom: 4px solid #f59e0b; padding-bottom: 20px; margin-bottom: 30px; display: flex; justify-content: space-between; align-items: center; }
+                .stats { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 40px; }
+                .stat-card { background: #f8fafc; padding: 25px; border-radius: 20px; border: 1px solid #e2e8f0; }
+                .stat-card h4 { margin: 0; color: #64748b; text-transform: uppercase; font-size: 11px; letter-spacing: 0.1em; }
+                .stat-card p { margin: 10px 0 0 0; font-size: 28px; font-weight: 900; color: #0f172a; }
+                table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+                th { text-align: left; background: #f1f5f9; padding: 15px; font-size: 12px; color: #475569; }
+                td { padding: 15px; border-bottom: 1px solid #e2e8f0; font-size: 13px; }
+                .footer { margin-top: 60px; font-size: 11px; color: #94a3b8; text-align: center; border-top: 1px solid #e2e8f0; padding-top: 20px; }
+                @media print { .no-print { display: none; } }
+            </style>
+        </head>
+        <body>
+            <div class="header">
+                <div>
+                    <h1 style="margin:0; font-size:32px; font-weight:900;">SALES REPORT</h1>
+                    <p style="margin:5px 0 0 0; color:#64748b;">Generated: ${new Date().toLocaleString()}</p>
+                </div>
+                <button onclick="window.print()" class="no-print" style="padding:10px 20px; background:#f59e0b; color:white; border:none; border-radius:10px; cursor:pointer; font-weight:bold;">PRINT REPORT</button>
+            </div>
+            
+            <div class="stats">
+                <div class="stat-card">
+                    <h4>Total Daily Revenue</h4>
+                    <p>${totalRevenue}</p>
+                </div>
+                <div class="stat-card">
+                    <h4>Successful Transactions</h4>
+                    <p>${totalOrders}</p>
+                </div>
+            </div>
+
+            <h3 style="margin-top:40px;">End of Day Summary</h3>
+            <p style="font-size:14px; color:#475569;">This report provides a snapshot of all transactions processed during the current session. For detailed itemized logs, please check the Spring Hub central database.</p>
+            
+            <div class="footer">
+                Safi POS Enterprise Hub - Certified Financial Summary
+            </div>
+        </body>
+        </html>
+    `;
+
+    const printWindow = window.open('', '_blank');
+    printWindow.document.write(reportContent);
+    printWindow.document.close();
 }
 
 init();
