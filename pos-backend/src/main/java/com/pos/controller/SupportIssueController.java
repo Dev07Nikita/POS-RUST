@@ -12,7 +12,6 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/support")
 @RequiredArgsConstructor
-@CrossOrigin(origins = "*")
 public class SupportIssueController {
     private final SupportIssueRepository supportIssueRepository;
 

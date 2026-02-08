@@ -9,7 +9,6 @@ import org.springframework.web.bind.annotation.*;
 @RestController
 @RequestMapping("/api/sales")
 @RequiredArgsConstructor
-@CrossOrigin(origins = "*")
 public class SaleController {
     private final SaleService saleService;
 
