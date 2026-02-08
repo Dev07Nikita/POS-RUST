@@ -7,7 +7,11 @@ const state = {
     ],
     cart: [],
     user: null,
-    business: "SAFI MODERN RETAIL"
+    business: "SAFI MODERN RETAIL",
+    filters: {
+        search: '',
+        category: 'All'
+    }
 };
 
 const UI = {
@@ -165,6 +169,25 @@ function init() {
         } else if (/^\d$/.test(e.key)) {
             barcodeBuffer += e.key;
         }
+    });
+
+    // Search & Category Filters
+    const searchInput = document.getElementById('productSearch');
+    if (searchInput) {
+        searchInput.addEventListener('input', (e) => {
+            state.filters.search = e.target.value.toLowerCase();
+            renderProducts();
+        });
+    }
+
+    const categoryBtns = document.querySelectorAll('.category-btn');
+    categoryBtns.forEach(btn => {
+        btn.addEventListener('click', () => {
+            categoryBtns.forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            state.filters.category = btn.getAttribute('data-category');
+            renderProducts();
+        });
     });
 }
 
@@ -372,6 +395,12 @@ function openAddProductModal() {
                 <input id="p-price" type="number" placeholder="Price" class="w-full bg-slate-900 p-4 rounded-xl border border-slate-700">
                 <input id="p-stock" type="number" placeholder="Stock" class="w-full bg-slate-900 p-4 rounded-xl border border-slate-700">
             </div>
+            <select id="p-category" class="w-full bg-slate-900 p-4 rounded-xl border border-slate-700 text-slate-400">
+                <option value="Retail">Retail</option>
+                <option value="Bakery">Bakery</option>
+                <option value="Electronics">Electronics</option>
+                <option value="Groceries">Groceries</option>
+            </select>
             <button onclick="saveProduct()" class="w-full py-4 gold-gradient rounded-xl font-bold text-lg">SAVE PRODUCT</button>
             <button onclick="closeModal()" class="w-full text-slate-500 text-sm mt-4">Cancel</button>
         </div>
@@ -390,6 +419,12 @@ function openEditProductModal(id) {
                 <input id="p-price" type="number" value="${p.price}" class="w-full bg-slate-900 p-4 rounded-xl border border-slate-700">
                 <input id="p-stock" type="number" value="${p.stockQuantity || p.stock || 0}" class="w-full bg-slate-900 p-4 rounded-xl border border-slate-700">
             </div>
+            <select id="p-category" class="w-full bg-slate-900 p-4 rounded-xl border border-slate-700 text-slate-400">
+                <option value="Retail" ${p.category === 'Retail' ? 'selected' : ''}>Retail</option>
+                <option value="Bakery" ${p.category === 'Bakery' ? 'selected' : ''}>Bakery</option>
+                <option value="Electronics" ${p.category === 'Electronics' ? 'selected' : ''}>Electronics</option>
+                <option value="Groceries" ${p.category === 'Groceries' ? 'selected' : ''}>Groceries</option>
+            </select>
             <button onclick="saveProduct(${id})" class="w-full py-4 gold-gradient rounded-xl font-bold text-lg">UPDATE PRODUCT</button>
             <button onclick="closeModal()" class="w-full text-slate-500 text-sm mt-4">Cancel</button>
         </div>
@@ -402,7 +437,8 @@ async function saveProduct(id = null) {
         code: document.getElementById('p-code').value,
         name: document.getElementById('p-name').value,
         price: parseFloat(document.getElementById('p-price').value),
-        stockQuantity: parseInt(document.getElementById('p-stock').value)
+        stockQuantity: parseInt(document.getElementById('p-stock').value),
+        category: document.getElementById('p-category').value
     };
 
     const url = id ? `http://localhost:8080/api/products/${id}` : 'http://localhost:8080/api/products';
@@ -444,10 +480,18 @@ function applyPermissions(role) {
 }
 
 function renderProducts() {
-    UI.grid.innerHTML = state.products.map(p => `
-        <div onclick="addToCart(${p.id})" class="glass p-5 rounded-[2rem] cursor-pointer hover:border-amber-500/50 transition-all group relative overflow-hidden ${p.stock <= 5 ? 'border-red-500/30 ring-1 ring-red-500/20' : ''}">
-            <div class="rust-badge absolute top-4 right-4 ${p.stock <= 5 ? 'bg-red-500 text-white animate-pulse' : ''} transition-opacity">
-                ${p.stock <= 5 ? 'LOW STOCK: ' : 'STOCK: '}${p.stockQuantity || p.stock || 0}
+    const filtered = state.products.filter(p => {
+        const matchesSearch = p.name.toLowerCase().includes(state.filters.search) || p.code.toLowerCase().includes(state.filters.search);
+        const matchesCategory = state.filters.category === 'All' || p.category === state.filters.category;
+        return matchesSearch && matchesCategory;
+    });
+
+    UI.grid.innerHTML = filtered.map((p, index) => `
+        <div onclick="addToCart(${p.id})" 
+             class="product-card p-5 rounded-[2rem] cursor-pointer relative overflow-hidden group ${p.stockQuantity <= 5 ? 'border-red-500/30 ring-1 ring-red-500/20' : ''}"
+             style="animation-delay: ${index * 50}ms">
+            <div class="rust-badge absolute top-4 right-4 ${p.stockQuantity <= 5 ? 'bg-red-500 text-white animate-pulse' : 'bg-amber-500 text-slate-900'}">
+                ${p.stockQuantity <= 5 ? 'LOW STOCK: ' : 'STOCK: '}${p.stockQuantity || 0}
             </div>
             <div class="w-full aspect-square bg-slate-800 rounded-2xl mb-4 flex items-center justify-center text-slate-700 group-hover:scale-105 transition-transform font-bold text-6xl">
                 ${p.name[0]}

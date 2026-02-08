@@ -42,6 +42,43 @@
             height: calc(100vh - 80px);
         }
 
+        .product-card {
+            background: rgba(30, 41, 59, 0.7);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            animation: card-appear 0.5s ease-out forwards;
+            opacity: 0;
+        }
+
+        .product-card:hover {
+            transform: translateY(-8px) scale(1.02);
+            border-color: #f59e0b;
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5), 0 0 15px rgba(245, 158, 11, 0.2);
+        }
+
+        .category-btn {
+            transition: all 0.3s ease;
+        }
+
+        .category-btn.active {
+            background: #f59e0b !important;
+            color: #0f172a !important;
+            font-weight: 800;
+        }
+
+        @keyframes card-appear {
+            from {
+                opacity: 0;
+                transform: scale(0.9);
+            }
+
+            to {
+                opacity: 1;
+                transform: scale(1);
+            }
+        }
+
         .scrollbar-hide::-webkit-scrollbar {
             display: none;
         }
@@ -222,12 +259,15 @@
         <!-- Products Area (Checkout View) -->
         <section id="viewCheckout" class="glass rounded-3xl p-6 overflow-hidden flex flex-col">
             <div class="flex justify-between items-center mb-6">
-                <input type="text" placeholder="Scan or search..."
+                <input id="productSearch" type="text" placeholder="Scan or search..."
                     class="w-80 bg-slate-800/50 border border-slate-700 rounded-xl py-3 px-5 focus:ring-2 focus:ring-amber-500 text-white outline-none">
-                <div class="flex gap-2">
-                    <button class="px-4 py-2 glass rounded-xl text-sm hover:bg-slate-700">All</button>
-                    <button class="px-4 py-2 glass rounded-xl text-sm hover:bg-slate-700">Retail</button>
-                    <button class="px-4 py-2 glass rounded-xl text-sm hover:bg-slate-700">Bakery</button>
+                <div class="flex gap-2" id="categoryFilters">
+                    <button class="px-4 py-2 glass rounded-xl text-sm hover:bg-slate-700 category-btn active"
+                        data-category="All">All</button>
+                    <button class="px-4 py-2 glass rounded-xl text-sm hover:bg-slate-700 category-btn"
+                        data-category="Retail">Retail</button>
+                    <button class="px-4 py-2 glass rounded-xl text-sm hover:bg-slate-700 category-btn"
+                        data-category="Bakery">Bakery</button>
                 </div>
             </div>
 
