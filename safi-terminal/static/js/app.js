@@ -618,6 +618,7 @@ async function triggerPayment(method) {
         if (!response.ok) throw new Error("Payment failed at terminal");
 
         const result = await response.json();
+        loadAnalytics(); // Refresh analytics for real-time feel
         showReceipt(result.qr_code);
         state.cart = [];
         renderCart();
@@ -738,3 +739,10 @@ function generateSalesReport() {
 }
 
 init();
+
+// Start Analytics Polling
+setInterval(() => {
+    if (state.currentUser && (state.currentUser.role === 'ADMIN' || state.currentUser.role === 'MANAGER' || state.currentUser.role === 'SALES')) {
+        loadAnalytics();
+    }
+}, 30000); // 30 seconds
