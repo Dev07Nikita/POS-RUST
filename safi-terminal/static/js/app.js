@@ -453,9 +453,13 @@ async function saveProduct(id = null) {
         if (response.ok) {
             closeModal();
             loadInventory();
+        } else {
+            const errorText = await response.text();
+            alert(`Failed to save (Status: ${response.status}): ${errorText}`);
         }
     } catch (e) {
-        alert("Failed to save product. Check Hub connection.");
+        console.error("Save Error:", e);
+        alert("Network Error: Could not connect to Hub on port 8080. Ensure the Spring Boot backend is running.");
     }
 }
 

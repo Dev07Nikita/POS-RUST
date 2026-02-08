@@ -25,5 +25,10 @@ public class Product {
     @Column(nullable = false)
     private Double price;
 
-    private Integer globalStock;
+    private String description;
+
+    @Column(nullable = false)
+    private Integer stockQuantity;
+
+    private String category;
 }
