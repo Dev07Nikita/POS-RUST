@@ -8,4 +8,6 @@ import java.util.Optional;
 @Repository
 public interface SaleRepository extends JpaRepository<Sale, Long> {
     Optional<Sale> findByTransactionId(String transactionId);
+
+    List<Sale> findByStatusOrderByTimestampDesc(String status);
 }

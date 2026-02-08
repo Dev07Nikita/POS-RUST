@@ -18,7 +18,7 @@ public class AnalyticsController {
 
     @GetMapping("/summary")
     public ResponseEntity<?> getSummary() {
-        List<Sale> sales = saleRepository.findAll();
+        List<Sale> sales = saleRepository.findByStatusOrderByTimestampDesc("SUCCESS");
 
         double totalRevenue = sales.stream().mapToDouble(Sale::getTotalAmount).sum();
         long totalOrders = sales.size();
@@ -26,7 +26,7 @@ public class AnalyticsController {
         Map<String, Object> stats = new HashMap<>();
         stats.put("totalRevenue", totalRevenue);
         stats.put("totalOrders", totalOrders);
-        stats.put("recentSales", sales.stream().limit(5).toList());
+        stats.put("recentSales", sales.stream().limit(10).toList());
 
         return ResponseEntity.ok(stats);
     }
