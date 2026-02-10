@@ -19,7 +19,7 @@ public class SyncController {
         if (saleRepository.findByTransactionId(sale.getTransactionId()).isEmpty()) {
             sale.setStatus("PENDING");
             Sale saved = saleRepository.save(sale);
-            paymentGateway.processPayment(saved);
+            paymentGateway.processTransaction(saved);
         }
         return ResponseEntity.ok("Sale record synced reaching central server.");
     }
