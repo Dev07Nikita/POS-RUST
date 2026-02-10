@@ -31,6 +31,16 @@ async function handleLogin() {
     const pass = document.getElementById('password').value;
     const error = document.getElementById('loginError');
 
+    // Clear previous error
+    error.classList.add('hidden');
+
+    // Validation
+    if (!user || !pass) {
+        error.innerText = "Please enter username and password";
+        error.classList.remove('hidden');
+        return;
+    }
+
     try {
         const response = await fetch('http://localhost:8080/api/auth/login', {
             method: 'POST',
@@ -38,32 +48,43 @@ async function handleLogin() {
             body: JSON.stringify({ username: user, password: pass })
         });
 
-        if (response.ok) {
-            const data = await response.json();
+        const data = await response.json();
+
+        if (response.ok && data.success) {
+            // Extract user data from response
+            const userData = data.user;
             state.user = {
-                name: data.fullName || data.username,
-                role: data.roles[0].name.replace('ROLE_', '')
+                name: userData.fullName || userData.username,
+                role: userData.roles && userData.roles.length > 0
+                    ? userData.roles[0].name.replace('ROLE_', '')
+                    : 'USER'
             };
+
+            console.log("Login successful:", state.user);
             init();
             UI.loginOverlay.classList.add('hidden');
             return;
+        } else {
+            error.innerText = data.message || "Invalid username or password";
+            error.classList.remove('hidden');
         }
     } catch (e) {
-        console.warn("Backend not reached, using local fallback");
-    }
-
-    const demoProfiles = {
-        'admin': { name: 'Super Admin', role: 'ADMIN' },
-        'manager': { name: 'Store Manager', role: 'MANAGER' },
-        'cashier': { name: 'Main Cashier', role: 'CASHIER' }
-    };
-
-    if (demoProfiles[user] && pass === '1234') {
-        state.user = demoProfiles[user];
-        init();
-        UI.loginOverlay.classList.add('hidden');
-    } else {
+        console.warn("Backend not reachable, trying local fallback:", e);
+        error.innerText = "Cannot connect to server. Please ensure backend is running on port 8080.";
         error.classList.remove('hidden');
+
+        // Local fallback for demo
+        const demoProfiles = {
+            'admin': { name: 'Super Admin', role: 'ADMIN' },
+            'manager': { name: 'Store Manager', role: 'MANAGER' },
+            'cashier': { name: 'Main Cashier', role: 'CASHIER' }
+        };
+
+        if (demoProfiles[user] && pass === '1234') {
+            state.user = demoProfiles[user];
+            init();
+            UI.loginOverlay.classList.add('hidden');
+        }
     }
 }
 
@@ -82,18 +103,46 @@ async function handleSignUp() {
     const password = document.getElementById('regPassword').value;
     const role = document.getElementById('regRole').value;
 
+    // Validation
+    if (!username || !email || !password) {
+        alert("Please fill in all fields");
+        return;
+    }
+
+    if (username.length < 3) {
+        alert("Username must be at least 3 characters");
+        return;
+    }
+
+    if (password.length < 6) {
+        alert("Password must be at least 6 characters");
+        return;
+    }
+
     try {
         const response = await fetch('http://localhost:8080/api/auth/register', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ username, email, password, role })
+            body: JSON.stringify({
+                username,
+                email,
+                password,
+                fullName: username, // Use username as fullName for now
+                role
+            })
         });
-        if (response.ok) {
-            alert("Registration successful! Please login.");
+
+        const data = await response.json();
+
+        if (response.ok && data.success) {
+            alert("Registration successful! Please login with your credentials.");
             switchAuthState('login');
+        } else {
+            alert(data.message || "Registration failed. Please try again.");
         }
     } catch (e) {
-        alert("Action failed. Ensure backend Hub is running on port 8080.");
+        console.error("Registration error:", e);
+        alert("Could not connect to backend. Please ensure the server is running on port 8080.");
     }
 }
 
