@@ -6,41 +6,49 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 @Service
-@Slf4j
 @RequiredArgsConstructor
+@Slf4j
 public class PaymentGateway {
 
     private final MpesaService mpesaService;
 
-    public void processPayment(Sale sale) {
-        log.info("Orchestrating {} payment for {} KES", sale.getPaymentMethod(), sale.getTotalAmount());
+    public Sale processTransaction(Sale sale) {
+        log.info("Processing {} payment for KES {}", sale.getPaymentMethod(), sale.getTotalAmount());
 
-        switch (sale.getPaymentMethod().toUpperCase()) {
-            case "M-PESA", "M-PESA STK" -> triggerMpesa(sale);
-            case "KCB" -> triggerKcb(sale);
-            case "EQUITY" -> triggerEquity(sale);
-            case "CASH" -> finalizeCash(sale);
-            default -> log.warn("Unknown method: {}", sale.getPaymentMethod());
+        switch (sale.getPaymentMethod()) {
+            case "M-PESA", "M-PESA STK" -> {
+                try {
+                    mpesaService.triggerStkPush(sale);
+                    log.info("M-Pesa STK Push initiated for transaction {}", sale.getTransactionId());
+                } catch (Exception e) {
+                    log.error("M-Pesa payment failed: {}", e.getMessage());
+                    sale.setStatus("FAILED");
+                    throw e;
+                }
+            }
+            case "BANK_KCB" -> triggerKcbPayment(sale);
+            case "BANK_EQUITY" -> triggerEquityPayment(sale);
+            case "CASH" -> finalizeCashPayment(sale);
+            default -> throw new IllegalArgumentException("Unknown payment method: " + sale.getPaymentMethod());
         }
+
+        return sale;
     }
 
-    private void triggerMpesa(Sale sale) {
-        log.info("Sending STK Push to customer: {}", sale.getCustomerPhone());
-        mpesaService.triggerStkPush(sale.getCustomerPhone(), sale.getTotalAmount(), sale.getTransactionId());
+    private void triggerKcbPayment(Sale sale) {
+        log.info("KCB API call for transaction {}", sale.getTransactionId());
+        // Integration with BUNI API
+        sale.setStatus("PENDING");
     }
 
-    private void triggerKcb(Sale sale) {
-        log.info("Connecting to KCB BUNI API...");
-        // BUNI integration logic
+    private void triggerEquityPayment(Sale sale) {
+        log.info("Equity Jenga API call for transaction {}", sale.getTransactionId());
+        // Integration with Jenga API
+        sale.setStatus("PENDING");
     }
 
-    private void triggerEquity(Sale sale) {
-        log.info("Connecting to Equity Jenga API...");
-        // Jenga integration logic
-    }
-
-    private void finalizeCash(Sale sale) {
+    private void finalizeCashPayment(Sale sale) {
         sale.setStatus("SUCCESS");
-        log.info("Cash payment finalized globally.");
+        log.info("Cash payment recorded for transaction {}", sale.getTransactionId());
     }
 }

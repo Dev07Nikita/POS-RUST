@@ -1,9 +1,17 @@
 package com.pos.controller;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.pos.dto.MpesaStkCallbackDto;
+import com.pos.model.MpesaTransaction;
+import com.pos.repository.MpesaTransactionRepository;
 import com.pos.service.MpesaService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+
+import java.util.HashMap;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/mpesa")
@@ -12,29 +20,116 @@ import org.springframework.web.bind.annotation.*;
 public class MpesaController {
 
     private final MpesaService mpesaService;
+    private final MpesaTransactionRepository transactionRepository;
+    private final ObjectMapper objectMapper = new ObjectMapper();
 
+    /**
+     * STK Push callback endpoint - receives payment status from M-Pesa
+     */
     @PostMapping("/callback")
-    public void handleStkCallback(@RequestBody String payload) {
-        log.info("M-Pesa STK Callback Received: {}", payload);
-        // Logic to update sale status based on payload
+    public ResponseEntity<Map<String, Object>> handleStkCallback(@RequestBody String payload) {
+        log.info("M-Pesa STK Callback Received");
+        log.debug("Callback Payload: {}", payload);
+
+        try {
+            // Parse callback JSON
+            MpesaStkCallbackDto callback = objectMapper.readValue(payload, MpesaStkCallbackDto.class);
+
+            // Process callback asynchronously to respond quickly to M-Pesa
+            mpesaService.processStkCallback(callback, payload);
+
+            // Respond to M-Pesa immediately
+            Map<String, Object> response = new HashMap<>();
+            response.put("ResultCode", 0);
+            response.put("ResultDesc", "Accepted");
+
+            return ResponseEntity.ok(response);
+
+        } catch (Exception e) {
+            log.error("Error processing M-Pesa callback: {}", e.getMessage(), e);
+
+            // Still respond with success to M-Pesa to avoid retries
+            Map<String, Object> response = new HashMap<>();
+            response.put("ResultCode", 0);
+            response.put("ResultDesc", "Accepted");
+
+            return ResponseEntity.ok(response);
+        }
     }
 
+    /**
+     * C2B Validation endpoint - validates incoming C2B payments
+     */
     @PostMapping("/callback/validation")
-    public String validateC2B(@RequestBody String payload) {
-        log.info("M-Pesa C2B Validation Request: {}", payload);
-        // Return Accept or Reject
-        return "{\"ResultCode\":0, \"ResultDesc\":\"Accepted\"}";
+    public ResponseEntity<Map<String, Object>> validateC2B(@RequestBody String payload) {
+        log.info("M-Pesa C2B Validation Request");
+        log.debug("Validation Payload: {}", payload);
+
+        // Accept all C2B payments by default
+        Map<String, Object> response = new HashMap<>();
+        response.put("ResultCode", 0);
+        response.put("ResultDesc", "Accepted");
+
+        return ResponseEntity.ok(response);
     }
 
+    /**
+     * C2B Confirmation endpoint - confirms C2B payment received
+     */
     @PostMapping("/callback/confirmation")
-    public void confirmC2B(@RequestBody String payload) {
-        log.info("M-Pesa C2B Confirmation Received: {}", payload);
-        // Logic to record the C2B payment in database
+    public ResponseEntity<Map<String, Object>> confirmC2B(@RequestBody String payload) {
+        log.info("M-Pesa C2B Confirmation Received");
+        log.debug("Confirmation Payload: {}", payload);
+
+        // TODO: Process C2B payment and create transaction record
+
+        Map<String, Object> response = new HashMap<>();
+        response.put("ResultCode", 0);
+        response.put("ResultDesc", "Accepted");
+
+        return ResponseEntity.ok(response);
     }
 
+    /**
+     * Register C2B URLs with M-Pesa
+     */
     @GetMapping("/register")
-    public String registerUrls() {
-        mpesaService.registerUrls();
-        return "C2B URLs Registration Initiated";
+    public ResponseEntity<String> registerUrls() {
+        try {
+            mpesaService.registerUrls();
+            return ResponseEntity.ok("C2B URLs Registration Initiated Successfully");
+        } catch (Exception e) {
+            log.error("URL registration failed: {}", e.getMessage());
+            return ResponseEntity.internalServerError().body("Registration failed: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Query transaction status manually
+     */
+    @GetMapping("/status/{checkoutRequestId}")
+    public ResponseEntity<MpesaTransaction> queryStatus(@PathVariable String checkoutRequestId) {
+        try {
+            mpesaService.queryTransactionStatus(checkoutRequestId);
+
+            MpesaTransaction transaction = transactionRepository
+                    .findByCheckoutRequestId(checkoutRequestId)
+                    .orElseThrow(() -> new RuntimeException("Transaction not found"));
+
+            return ResponseEntity.ok(transaction);
+        } catch (Exception e) {
+            log.error("Status query failed: {}", e.getMessage());
+            return ResponseEntity.internalServerError().build();
+        }
+    }
+
+    /**
+     * Get transaction by checkout request ID
+     */
+    @GetMapping("/transaction/{checkoutRequestId}")
+    public ResponseEntity<MpesaTransaction> getTransaction(@PathVariable String checkoutRequestId) {
+        return transactionRepository.findByCheckoutRequestId(checkoutRequestId)
+                .map(ResponseEntity::ok)
+                .orElse(ResponseEntity.notFound().build());
     }
 }
