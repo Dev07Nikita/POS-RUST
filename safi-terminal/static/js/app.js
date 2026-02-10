@@ -189,6 +189,25 @@ function init() {
             renderProducts();
         });
     });
+
+    // Cart scroll indicator listener
+    const cartScrollContainer = document.getElementById('cart-scroll-container');
+    const scrollIndicator = document.getElementById('scroll-indicator');
+
+    if (cartScrollContainer && scrollIndicator) {
+        cartScrollContainer.addEventListener('scroll', () => {
+            const isAtBottom = cartScrollContainer.scrollHeight - cartScrollContainer.scrollTop <= cartScrollContainer.clientHeight + 50;
+
+            if (isAtBottom) {
+                scrollIndicator.classList.add('hidden');
+            } else if (state.cart.length > 0) {
+                const hasScroll = cartScrollContainer.scrollHeight > cartScrollContainer.clientHeight;
+                if (hasScroll) {
+                    scrollIndicator.classList.remove('hidden');
+                }
+            }
+        });
+    }
 }
 
 async function syncProductsFromHub() {
@@ -520,6 +539,26 @@ function removeFromCart(pid) {
 }
 
 function renderCart() {
+    const cartCount = document.getElementById('cart-count');
+    const emptyMessage = document.getElementById('empty-cart-message');
+    const scrollContainer = document.getElementById('cart-scroll-container');
+    const scrollIndicator = document.getElementById('scroll-indicator');
+
+    // Update cart count badge
+    if (cartCount) {
+        cartCount.innerText = state.cart.length;
+    }
+
+    // Show/hide empty cart message
+    if (emptyMessage) {
+        if (state.cart.length === 0) {
+            emptyMessage.classList.remove('hidden');
+        } else {
+            emptyMessage.classList.add('hidden');
+        }
+    }
+
+    // Render cart items
     UI.cart.innerHTML = state.cart.map(item => `
         <div class="flex justify-between items-center glass p-4 rounded-2xl animate-in slide-in-from-right-4 duration-300">
             <div>
@@ -532,8 +571,24 @@ function renderCart() {
             </div>
         </div>
     `).join('');
+
+    // Update total
     const total = state.cart.reduce((s, i) => s + (i.price * i.quantity), 0);
     UI.total.innerText = total.toLocaleString();
+
+    // Check if scroll indicator should be shown
+    setTimeout(() => {
+        if (scrollContainer && scrollIndicator) {
+            const hasScroll = scrollContainer.scrollHeight > scrollContainer.clientHeight;
+            const isAtBottom = scrollContainer.scrollHeight - scrollContainer.scrollTop <= scrollContainer.clientHeight + 50;
+
+            if (hasScroll && !isAtBottom && state.cart.length > 0) {
+                scrollIndicator.classList.remove('hidden');
+            } else {
+                scrollIndicator.classList.add('hidden');
+            }
+        }
+    }, 100);
 }
 
 function openPaymentModal(method) {
