@@ -60,6 +60,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let app = Router::new()
         .route("/api/products", get(list_products))
         .route("/api/checkout", post(checkout))
+        .route("/api/local-analytics", get(local_analytics))
+        .route("/api/local-sales/recent", get(recent_sales))
         .fallback_service(ServeDir::new("static"))
         .layer(CorsLayer::permissive())
         .with_state(pool);
@@ -145,6 +147,133 @@ async fn checkout(
         "status": "success",
         "sale_id": sale_id,
         "qr_code": qr_base64
+    }))
+}
+
+async fn local_analytics(
+    axum::extract::State(pool): axum::extract::State<SqlitePool>,
+) -> Json<serde_json::Value> {
+    let today = Utc::now().format("%Y-%m-%d").to_string();
+
+    // Get today's sales
+    let today_sales = sqlx::query(
+        "SELECT id, timestamp, total, payment_method, cashier FROM sales WHERE timestamp LIKE ? ORDER BY timestamp DESC"
+    )
+        .bind(format!("{}%", today))
+        .fetch_all(&pool)
+        .await
+        .unwrap_or_default();
+
+    use sqlx::Row;
+
+    let total_revenue: f64 = today_sales.iter().map(|r| r.get::<f64, _>("total")).sum();
+    let total_orders = today_sales.len();
+
+    // Build recent sales with items
+    let mut recent_sales_json = Vec::new();
+    for row in today_sales.iter().take(15) {
+        let sale_id: String = row.get("id");
+        let items = sqlx::query("SELECT product_name, quantity, unit_price FROM sale_items WHERE sale_id = ?")
+            .bind(&sale_id)
+            .fetch_all(&pool)
+            .await
+            .unwrap_or_default();
+
+        let sale_items: Vec<serde_json::Value> = items.iter().map(|item| {
+            let qty: i64 = item.get("quantity");
+            let price: f64 = item.get("unit_price");
+            serde_json::json!({
+                "productName": item.get::<String, _>("product_name"),
+                "quantity": qty,
+                "unitPrice": price,
+                "subtotal": (qty as f64) * price
+            })
+        }).collect();
+
+        recent_sales_json.push(serde_json::json!({
+            "transactionId": sale_id,
+            "timestamp": row.get::<String, _>("timestamp"),
+            "totalAmount": row.get::<f64, _>("total"),
+            "paymentMethod": row.get::<String, _>("payment_method"),
+            "cashier": row.get::<String, _>("cashier"),
+            "items": sale_items
+        }));
+    }
+
+    // Payment method breakdown
+    let mut cash_total = 0.0f64;
+    let mut mpesa_total = 0.0f64;
+    let mut bank_total = 0.0f64;
+    for row in &today_sales {
+        let method: String = row.get("payment_method");
+        let amount: f64 = row.get("total");
+        if method.to_uppercase().contains("CASH") {
+            cash_total += amount;
+        } else if method.to_uppercase().contains("PESA") || method.to_uppercase().contains("STK") {
+            mpesa_total += amount;
+        } else {
+            bank_total += amount;
+        }
+    }
+
+    Json(serde_json::json!({
+        "totalRevenue": total_revenue,
+        "totalOrders": total_orders,
+        "averageOrder": if total_orders > 0 { total_revenue / total_orders as f64 } else { 0.0 },
+        "recentSales": recent_sales_json,
+        "paymentBreakdown": {
+            "cash": cash_total,
+            "mpesa": mpesa_total,
+            "bank": bank_total
+        },
+        "date": today
+    }))
+}
+
+async fn recent_sales(
+    axum::extract::State(pool): axum::extract::State<SqlitePool>,
+) -> Json<serde_json::Value> {
+    use sqlx::Row;
+
+    let sales = sqlx::query(
+        "SELECT id, timestamp, total, payment_method, cashier FROM sales ORDER BY timestamp DESC LIMIT 20"
+    )
+        .fetch_all(&pool)
+        .await
+        .unwrap_or_default();
+
+    let mut sales_json = Vec::new();
+    for row in &sales {
+        let sale_id: String = row.get("id");
+        let items = sqlx::query("SELECT product_name, quantity, unit_price FROM sale_items WHERE sale_id = ?")
+            .bind(&sale_id)
+            .fetch_all(&pool)
+            .await
+            .unwrap_or_default();
+
+        let sale_items: Vec<serde_json::Value> = items.iter().map(|item| {
+            let qty: i64 = item.get("quantity");
+            let price: f64 = item.get("unit_price");
+            serde_json::json!({
+                "productName": item.get::<String, _>("product_name"),
+                "quantity": qty,
+                "unitPrice": price,
+                "subtotal": (qty as f64) * price
+            })
+        }).collect();
+
+        sales_json.push(serde_json::json!({
+            "transactionId": sale_id,
+            "timestamp": row.get::<String, _>("timestamp"),
+            "totalAmount": row.get::<f64, _>("total"),
+            "paymentMethod": row.get::<String, _>("payment_method"),
+            "cashier": row.get::<String, _>("cashier"),
+            "items": sale_items
+        }));
+    }
+
+    Json(serde_json::json!({
+        "sales": sales_json
     }))
 }
 

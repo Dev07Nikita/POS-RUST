@@ -405,23 +405,63 @@ async function submitIssue() {
 }
 
 async function loadAnalytics() {
-    try {
-        const response = await fetch('http://localhost:8080/api/analytics/summary');
-        if (response.ok) {
-            const data = await response.json();
-            document.getElementById('statRevenue').innerText = `KES ${data.totalRevenue.toLocaleString()}`;
-            document.getElementById('statOrders').innerText = data.totalOrders;
+    let data = null;
 
-            const recent = document.getElementById('analytics-recent-sales');
-            recent.innerHTML = (data.recentSales || []).map(s => `
-                <div class="p-4 bg-slate-900/50 rounded-2xl border border-slate-700 space-y-3">
+    // Try local Tauri analytics first (instant, always available)
+    try {
+        const localResp = await fetch('/api/local-analytics');
+        if (localResp.ok) {
+            data = await localResp.json();
+            console.log('Analytics loaded from local terminal');
+        }
+    } catch (e) {
+        console.warn('Local analytics not available, trying Spring Boot...');
+    }
+
+    // Fallback to Spring Boot central hub
+    if (!data) {
+        try {
+            const hubResp = await fetch('http://localhost:8080/api/analytics/summary');
+            if (hubResp.ok) {
+                data = await hubResp.json();
+                console.log('Analytics loaded from Spring Boot Hub');
+            }
+        } catch (e) {
+            console.warn('Spring Boot analytics also unavailable.');
+        }
+    }
+
+    if (!data) return;
+
+    // Update stats display
+    document.getElementById('statRevenue').innerText = `KES ${(data.totalRevenue || 0).toLocaleString()}`;
+    document.getElementById('statOrders').innerText = data.totalOrders || 0;
+
+    // Store analytics data globally for daily report
+    state.lastAnalytics = data;
+
+    // Render recent sales
+    const recent = document.getElementById('analytics-recent-sales');
+    if (recent) {
+        const sales = data.recentSales || [];
+        if (sales.length === 0) {
+            recent.innerHTML = `
+                <div class="text-center py-8 text-slate-500">
+                    <p class="text-4xl mb-3">📊</p>
+                    <p class="font-bold">No transactions today</p>
+                    <p class="text-xs mt-1">Sales will appear here as you process them</p>
+                </div>
+            `;
+        } else {
+            recent.innerHTML = sales.map(s => `
+                <div class="p-4 bg-slate-900/50 rounded-2xl border border-slate-700 space-y-3 animate-in fade-in duration-300">
                     <div class="flex justify-between items-center pb-2 border-b border-slate-800">
                         <div>
-                            <p class="text-xs font-black text-amber-500">${s.transactionId.substring(0, 8)}...</p>
+                            <p class="text-xs font-black text-amber-500">${(s.transactionId || '').substring(0, 8)}...</p>
                             <p class="text-[10px] text-slate-500">${new Date(s.timestamp).toLocaleString()}</p>
                         </div>
                         <div class="text-right">
-                            <p class="font-black text-lg">KES ${s.totalAmount.toLocaleString()}</p>
+                            <p class="font-black text-lg">KES ${(s.totalAmount || 0).toLocaleString()}</p>
                             <p class="text-[9px] text-slate-400 uppercase font-bold">Via ${s.paymentMethod || 'CASH'}</p>
                         </div>
                     </div>
@@ -436,8 +476,6 @@ async function loadAnalytics() {
                 </div>
             `).join('');
         }
-    } catch (e) {
-        console.warn("Analytics API failed.");
     }
 }
 
@@ -722,10 +760,15 @@ async function triggerPayment(method) {
         if (!response.ok) throw new Error("Payment failed at terminal");
 
         const result = await response.json();
-        loadAnalytics(); // Refresh analytics for real-time feel
         showReceipt(result.qr_code);
         state.cart = [];
         renderCart();
+
+        // Refresh products to show updated stock levels
+        await syncProductsFromHub();
+
+        // Refresh analytics immediately
+        setTimeout(() => loadAnalytics(), 500);
     } catch (e) {
         alert("Transaction Failed: " + e.message);
     }
@@ -785,53 +828,137 @@ function closeReceipt() {
     renderCart();
 }
 
-function generateSalesReport() {
-    const totalRevenue = document.getElementById('statRevenue').innerText;
-    const totalOrders = document.getElementById('statOrders').innerText;
+async function generateSalesReport() {
+    // Fetch real transaction data
+    let reportData = null;
+    try {
+        const resp = await fetch('/api/local-analytics');
+        if (resp.ok) reportData = await resp.json();
+    } catch (e) {
+        console.warn('Could not fetch local analytics for report');
+    }
+
+    // Fallback to cached analytics
+    if (!reportData) reportData = state.lastAnalytics;
+    if (!reportData) {
+        alert('No analytics data available. Please ensure the system is running.');
+        return;
+    }
+
+    const totalRevenue = (reportData.totalRevenue || 0).toLocaleString();
+    const totalOrders = reportData.totalOrders || 0;
+    const avgOrder = (reportData.averageOrder || 0).toFixed(2);
+    const breakdown = reportData.paymentBreakdown || { cash: 0, mpesa: 0, bank: 0 };
+    const sales = reportData.recentSales || [];
+
+    // Build transaction rows
+    const txRows = sales.map((s, i) => {
+        const items = (s.items || []).map(it => `${it.productName} x${it.quantity}`).join(', ');
+        const time = new Date(s.timestamp).toLocaleTimeString();
+        return `
+            <tr>
+                <td>${i + 1}</td>
+                <td style="font-family:monospace; font-size:11px;">${(s.transactionId || '').substring(0, 12)}...</td>
+                <td>${time}</td>
+                <td>${items || '-'}</td>
+                <td style="text-transform:uppercase;">${s.paymentMethod || 'CASH'}</td>
+                <td style="font-weight:bold; text-align:right;">KES ${(s.totalAmount || 0).toLocaleString()}</td>
+            </tr>
+        `;
+    }).join('');
 
     let reportContent = `
         <html>
         <head>
             <title>Safi POS - Daily Sales Report</title>
             <style>
-                body { font-family: 'Inter', sans-serif; padding: 40px; color: #0f172a; line-height: 1.5; }
+                body { font-family: 'Inter', 'Segoe UI', sans-serif; padding: 40px; color: #0f172a; line-height: 1.5; }
                 .header { border-bottom: 4px solid #f59e0b; padding-bottom: 20px; margin-bottom: 30px; display: flex; justify-content: space-between; align-items: center; }
-                .stats { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 40px; }
-                .stat-card { background: #f8fafc; padding: 25px; border-radius: 20px; border: 1px solid #e2e8f0; }
-                .stat-card h4 { margin: 0; color: #64748b; text-transform: uppercase; font-size: 11px; letter-spacing: 0.1em; }
-                .stat-card p { margin: 10px 0 0 0; font-size: 28px; font-weight: 900; color: #0f172a; }
+                .stats { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; margin-bottom: 30px; }
+                .stat-card { background: #f8fafc; padding: 20px; border-radius: 16px; border: 1px solid #e2e8f0; }
+                .stat-card h4 { margin: 0; color: #64748b; text-transform: uppercase; font-size: 10px; letter-spacing: 0.1em; }
+                .stat-card p { margin: 8px 0 0 0; font-size: 24px; font-weight: 900; color: #0f172a; }
+                .breakdown { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; margin: 20px 0; }
+                .breakdown-card { background: #fefce8; padding: 16px; border-radius: 12px; border: 1px solid #fde68a; text-align: center; }
+                .breakdown-card.mpesa { background: #ecfdf5; border-color: #a7f3d0; }
+                .breakdown-card.bank { background: #eff6ff; border-color: #bfdbfe; }
+                .breakdown-card h5 { margin: 0; font-size: 10px; text-transform: uppercase; color: #64748b; letter-spacing: 0.05em; }
+                .breakdown-card p { margin: 6px 0 0 0; font-size: 18px; font-weight: 800; }
                 table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-                th { text-align: left; background: #f1f5f9; padding: 15px; font-size: 12px; color: #475569; }
-                td { padding: 15px; border-bottom: 1px solid #e2e8f0; font-size: 13px; }
-                .footer { margin-top: 60px; font-size: 11px; color: #94a3b8; text-align: center; border-top: 1px solid #e2e8f0; padding-top: 20px; }
-                @media print { .no-print { display: none; } }
+                th { text-align: left; background: #f1f5f9; padding: 12px; font-size: 11px; color: #475569; text-transform: uppercase; letter-spacing: 0.05em; }
+                td { padding: 12px; border-bottom: 1px solid #e2e8f0; font-size: 12px; }
+                tr:hover { background: #fefce8; }
+                .footer { margin-top: 40px; font-size: 10px; color: #94a3b8; text-align: center; border-top: 1px solid #e2e8f0; padding-top: 16px; }
+                .section-title { font-size: 14px; font-weight: 800; color: #334155; margin: 30px 0 10px 0; text-transform: uppercase; letter-spacing: 0.05em; }
+                @media print { .no-print { display: none; } body { padding: 20px; } }
             </style>
         </head>
         <body>
             <div class="header">
                 <div>
-                    <h1 style="margin:0; font-size:32px; font-weight:900;">SALES REPORT</h1>
-                    <p style="margin:5px 0 0 0; color:#64748b;">Generated: ${new Date().toLocaleString()}</p>
+                    <h1 style="margin:0; font-size:28px; font-weight:900;">DAILY SALES REPORT</h1>
+                    <p style="margin:5px 0 0 0; color:#64748b; font-size:13px;">SAFI MODERN RETAIL &mdash; ${new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</p>
+                    <p style="margin:2px 0 0 0; color:#94a3b8; font-size:11px;">Generated: ${new Date().toLocaleString()} | Cashier: ${state.user ? state.user.name : 'N/A'}</p>
                 </div>
-                <button onclick="window.print()" class="no-print" style="padding:10px 20px; background:#f59e0b; color:white; border:none; border-radius:10px; cursor:pointer; font-weight:bold;">PRINT REPORT</button>
+                <button onclick="window.print()" class="no-print" style="padding:10px 24px; background:#f59e0b; color:white; border:none; border-radius:10px; cursor:pointer; font-weight:bold; font-size:13px;">🖨️ PRINT</button>
             </div>
             
             <div class="stats">
                 <div class="stat-card">
-                    <h4>Total Daily Revenue</h4>
-                    <p>${totalRevenue}</p>
+                    <h4>Total Revenue</h4>
+                    <p>KES ${totalRevenue}</p>
                 </div>
                 <div class="stat-card">
-                    <h4>Successful Transactions</h4>
+                    <h4>Total Transactions</h4>
                     <p>${totalOrders}</p>
+                </div>
+                <div class="stat-card">
+                    <h4>Average Order</h4>
+                    <p>KES ${parseFloat(avgOrder).toLocaleString()}</p>
                 </div>
             </div>
 
-            <h3 style="margin-top:40px;">End of Day Summary</h3>
-            <p style="font-size:14px; color:#475569;">This report provides a snapshot of all transactions processed during the current session. For detailed itemized logs, please check the Spring Hub central database.</p>
+            <p class="section-title">Payment Breakdown</p>
+            <div class="breakdown">
+                <div class="breakdown-card">
+                    <h5>💵 Cash</h5>
+                    <p>KES ${(breakdown.cash || 0).toLocaleString()}</p>
+                </div>
+                <div class="breakdown-card mpesa">
+                    <h5>📱 M-Pesa</h5>
+                    <p>KES ${(breakdown.mpesa || 0).toLocaleString()}</p>
+                </div>
+                <div class="breakdown-card bank">
+                    <h5>🏦 Bank</h5>
+                    <p>KES ${(breakdown.bank || 0).toLocaleString()}</p>
+                </div>
+            </div>
+
+            <p class="section-title">Transaction Details (${sales.length} transactions)</p>
+            ${sales.length > 0 ? `
+            <table>
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>Transaction ID</th>
+                        <th>Time</th>
+                        <th>Items</th>
+                        <th>Payment</th>
+                        <th style="text-align:right;">Amount</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${txRows}
+                    <tr style="background:#f1f5f9; font-weight:bold;">
+                        <td colspan="5" style="text-align:right; font-size:13px;">GRAND TOTAL</td>
+                        <td style="text-align:right; font-size:15px; color:#f59e0b;">KES ${totalRevenue}</td>
+                    </tr>
+                </tbody>
+            </table>
+            ` : '<p style="color:#94a3b8; text-align:center; padding:30px;">No transactions recorded today.</p>'}
             
             <div class="footer">
-                Safi POS Enterprise Hub - Certified Financial Summary
+                Safi POS Enterprise Hub &mdash; Certified Financial Summary &mdash; ${new Date().toLocaleDateString()}
             </div>
         </body>
         </html>
@@ -844,9 +971,9 @@ function generateSalesReport() {
 
 init();
 
-// Start Analytics Polling
+// Start Analytics Polling — every 10 seconds for live updates
 setInterval(() => {
-    if (state.currentUser && (state.currentUser.role === 'ADMIN' || state.currentUser.role === 'MANAGER' || state.currentUser.role === 'SALES')) {
+    if (state.user) {
         loadAnalytics();
     }
-}, 30000); // 30 seconds
+}, 10000); // 10 seconds for responsive live updates
