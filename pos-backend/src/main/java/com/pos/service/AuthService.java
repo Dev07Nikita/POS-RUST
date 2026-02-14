@@ -192,4 +192,11 @@ public class AuthService {
     public boolean isEmailAvailable(String email) {
         return userRepository.findByEmail(email).isEmpty();
     }
+
+    /**
+     * Get all registered users
+     */
+    public List<User> getAllUsers() {
+        return userRepository.findAll();
+    }
 }

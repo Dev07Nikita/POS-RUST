@@ -13,8 +13,12 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import com.pos.model.AuditLog;
+import com.pos.repository.AuditLogRepository;
+import jakarta.servlet.http.HttpServletRequest;
 
 @RestController
 @RequestMapping("/api/auth")
@@ -23,13 +27,14 @@ import java.util.Optional;
 @CrossOrigin(origins = { "http://localhost:3000", "http://127.0.0.1:3000" })
 public class AuthController {
     private final AuthService authService;
+    private final AuditLogRepository auditLogRepository;
 
     /**
      * User login endpoint
      */
     @PostMapping("/login")
-    public ResponseEntity<?> login(@Valid @RequestBody LoginRequest request) {
-        log.info("Login attempt for user: {}", request.getUsername());
+    public ResponseEntity<?> login(@Valid @RequestBody LoginRequest request, HttpServletRequest httpRequest) {
+        log.info("Login attempt for user: {} from IP: {}", request.getUsername(), getClientIp(httpRequest));
 
         Optional<User> user = authService.login(request.getUsername(), request.getPassword());
 
@@ -46,6 +51,14 @@ public class AuthController {
 
             return ResponseEntity.ok(response);
         }
+
+        // Log failed login attempt
+        auditLogRepository.save(AuditLog.builder()
+                .username(request.getUsername())
+                .action("FAILED_LOGIN")
+                .details("Failed login attempt")
+                .ipAddress(getClientIp(httpRequest))
+                .build());
 
         Map<String, Object> errorResponse = new HashMap<>();
         errorResponse.put("success", false);
@@ -189,15 +202,56 @@ public class AuthController {
      * Logout endpoint
      */
     @PostMapping("/logout")
-    public ResponseEntity<?> logout(@RequestBody Map<String, String> body) {
+    public ResponseEntity<?> logout(@RequestBody Map<String, String> body, HttpServletRequest httpRequest) {
         String username = body.get("username");
         log.info("User logged out: {}", username);
+
+        // Log the logout event
+        auditLogRepository.save(AuditLog.builder()
+                .username(username)
+                .action("LOGOUT")
+                .details("User logged out")
+                .ipAddress(getClientIp(httpRequest))
+                .build());
 
         Map<String, Object> response = new HashMap<>();
         response.put("success", true);
         response.put("message", "Logged out successfully");
 
         return ResponseEntity.ok(response);
+    }
+
+    /**
+     * Get ALL audit logs (admin only)
+     */
+    @GetMapping("/logs/all")
+    public ResponseEntity<?> getAllLogs() {
+        List<AuditLog> logs = auditLogRepository.findAll(
+                org.springframework.data.domain.Sort.by(
+                        org.springframework.data.domain.Sort.Direction.DESC, "timestamp"));
+        return ResponseEntity.ok(logs);
+    }
+
+    /**
+     * Get all registered users (admin)
+     */
+    @GetMapping("/users")
+    public ResponseEntity<?> getAllUsers() {
+        var users = authService.getAllUsers();
+        // Remove passwords before sending
+        users.forEach(u -> u.setPassword(null));
+        return ResponseEntity.ok(users);
+    }
+
+    /**
+     * Extract client IP address
+     */
+    private String getClientIp(HttpServletRequest request) {
+        String xForwardedFor = request.getHeader("X-Forwarded-For");
+        if (xForwardedFor != null && !xForwardedFor.isEmpty()) {
+            return xForwardedFor.split(",")[0].trim();
+        }
+        return request.getRemoteAddr();
     }
 }
 

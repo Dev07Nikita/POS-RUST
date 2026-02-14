@@ -16,8 +16,9 @@ public class AuditLog {
     private Long id;
 
     private String username;
-    private String action; // LOGIN, LOGOUT, SIGNUP, RESET_PASSWORD, SALE
+    private String action; // LOGIN, LOGOUT, SIGNUP, RESET_PASSWORD, SALE, FAILED_LOGIN
     private String details;
+    private String ipAddress;
     private LocalDateTime timestamp;
 
     @PrePersist
