@@ -46,12 +46,24 @@ public class AuthService {
             throw new IllegalArgumentException("Email already registered");
         }
 
+        // First user ever registered automatically becomes ADMIN
+        boolean isFirstUser = userRepository.count() == 0;
+        if (isFirstUser) {
+            roleName = "ADMIN";
+            log.info("First user registration — auto-assigning ADMIN role to: {}", username);
+        }
+
         // Get or create role
         Role role = roleRepository.findByName(roleName)
                 .orElseGet(() -> roleRepository.save(Role.builder().name(roleName).build()));
 
         Set<Role> roles = new HashSet<>();
         roles.add(role);
+
+        // If first user, also give MANAGER role
+        if (isFirstUser) {
+            roleRepository.findByName("MANAGER").ifPresent(roles::add);
+        }
 
         // Hash the password
         String hashedPassword = passwordUtil.hashPassword(password);
@@ -67,13 +79,17 @@ public class AuthService {
 
         User saved = userRepository.save(user);
 
+        String signupDetails = isFirstUser
+                ? "First admin account created (auto-assigned ADMIN + MANAGER)"
+                : "New account created as " + roleName;
+
         auditLogRepository.save(AuditLog.builder()
                 .username(username)
                 .action("SIGNUP")
-                .details("New account created as " + roleName)
+                .details(signupDetails)
                 .build());
 
-        log.info("User registered successfully: {}", username);
+        log.info("User registered successfully: {} as {}", username, roleName);
         return saved;
     }
 
