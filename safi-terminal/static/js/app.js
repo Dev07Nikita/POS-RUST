@@ -98,13 +98,14 @@ function switchAuthState(state) {
 }
 
 async function handleSignUp() {
-    const username = document.getElementById('regUsername').value;
-    const email = document.getElementById('regEmail').value;
+    const fullName = document.getElementById('regFullName').value.trim();
+    const username = document.getElementById('regUsername').value.trim();
+    const email = document.getElementById('regEmail').value.trim();
     const password = document.getElementById('regPassword').value;
     const role = document.getElementById('regRole').value;
 
     // Validation
-    if (!username || !email || !password) {
+    if (!fullName || !username || !email || !password) {
         alert("Please fill in all fields");
         return;
     }
@@ -127,7 +128,7 @@ async function handleSignUp() {
                 username,
                 email,
                 password,
-                fullName: username, // Use username as fullName for now
+                fullName,
                 role
             })
         });
@@ -135,7 +136,9 @@ async function handleSignUp() {
         const data = await response.json();
 
         if (response.ok && data.success) {
-            alert("Registration successful! Please login with your credentials.");
+            const userRole = data.user && data.user.roles && data.user.roles.length > 0
+                ? data.user.roles[0].name : role;
+            alert(`✅ Registration successful!\n\nUsername: ${username}\nRole: ${userRole}\n\nPlease login with your credentials.`);
             switchAuthState('login');
         } else {
             alert(data.message || "Registration failed. Please try again.");
