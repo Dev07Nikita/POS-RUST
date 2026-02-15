@@ -222,6 +222,18 @@ function init() {
     UI.cashierDisplay.innerText = state.user.name;
     UI.roleBadge.innerText = state.user.role;
 
+    // Update top-right role display
+    const userRoleDisplay = document.getElementById('userRoleDisplay');
+    if (userRoleDisplay) {
+        userRoleDisplay.innerText = state.user.role;
+    }
+
+    // Update Support Hub welcome message
+    const supportWelcomeMsg = document.getElementById('supportWelcomeMsg');
+    if (supportWelcomeMsg) {
+        supportWelcomeMsg.innerText = `Welcome to the Safi Support Hub. You are viewing messages for the ${state.user.role} department.`;
+    }
+
     // Color code the role badge based on department
     const roleColors = {
         'ADMIN': 'bg-red-600',
@@ -891,7 +903,7 @@ async function generateSalesReport() {
     // Fallback to cached analytics
     if (!reportData) reportData = state.lastAnalytics;
     if (!reportData) {
-        alert('No analytics data available. Please ensure the system is running.');
+        alert('❌ No analytics data available.\n\nPlease ensure the backend is running and try again after making some sales.');
         return;
     }
 
@@ -900,6 +912,11 @@ async function generateSalesReport() {
     const avgOrder = (reportData.averageOrder || 0).toFixed(2);
     const breakdown = reportData.paymentBreakdown || { cash: 0, mpesa: 0, bank: 0 };
     const sales = reportData.recentSales || [];
+
+    // Notify user if no transactions
+    if (sales.length === 0 && totalOrders === 0) {
+        alert('📊 No transactions recorded today.\n\nThe daily report will show zero sales. Make some transactions first!');
+    }
 
     // Build transaction rows
     const txRows = sales.map((s, i) => {
