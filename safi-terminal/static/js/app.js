@@ -221,6 +221,23 @@ function init() {
     UI.userDisplay.innerText = state.user.name;
     UI.cashierDisplay.innerText = state.user.name;
     UI.roleBadge.innerText = state.user.role;
+
+    // Color code the role badge based on department
+    const roleColors = {
+        'ADMIN': 'bg-red-600',
+        'MANAGER': 'bg-blue-600',
+        'SALES': 'bg-green-600',
+        'CASHIER': 'bg-amber-500',
+        'LOGISTICS': 'bg-purple-600',
+        'USER': 'bg-slate-600'
+    };
+
+    // Remove all possible color classes
+    UI.roleBadge.className = 'inline-block px-2 py-0.5 rounded-md text-white text-[10px] font-black mb-1';
+    // Add the role-specific color
+    const colorClass = roleColors[state.user.role] || 'bg-slate-600';
+    UI.roleBadge.classList.add(colorClass);
+
     applyPermissions(state.user.role);
     switchView('checkout');
     syncProductsFromHub();
