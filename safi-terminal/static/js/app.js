@@ -1022,7 +1022,13 @@ async function generateSalesReport() {
                     </tr>
                 </tbody>
             </table>
-            ` : '<p style="color:#94a3b8; text-align:center; padding:30px;">No transactions recorded today.</p>'}
+            ` : `
+            <div style="background:#fef3c7; border:2px dashed #fbbf24; border-radius:16px; padding:40px; text-align:center; margin:20px 0;">
+                <p style="font-size:48px; margin:0;">📊</p>
+                <p style="font-size:16px; font-weight:800; color:#92400e; margin:10px 0 0 0;">No transactions recorded today</p>
+                <p style="color:#78350f; margin:8px 0 0 0; font-size:13px;">Start making sales to see transaction details here!</p>
+            </div>
+            `}
             
             <div class="footer">
                 Safi POS Enterprise Hub &mdash; Certified Financial Summary &mdash; ${new Date().toLocaleDateString()}
