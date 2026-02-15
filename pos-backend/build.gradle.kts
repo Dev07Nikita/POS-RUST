@@ -9,6 +9,11 @@ version = "0.0.1-SNAPSHOT"
 
 java {
     sourceCompatibility = JavaVersion.VERSION_17
+    targetCompatibility = JavaVersion.VERSION_17
+    // Force JDK 17 for compilation and execution (avoids Lombok vs JDK 21+ TypeTag.UNKNOWN error)
+    toolchain {
+        languageVersion.set(JavaLanguageVersion.of(17))
+    }
 }
 
 configurations {
