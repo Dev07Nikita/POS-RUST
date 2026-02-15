@@ -4,7 +4,10 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.pos.dto.*;
 import com.pos.model.MpesaTransaction;
 import com.pos.model.Sale;
+import com.pos.model.SaleItem;
+import com.pos.model.Product;
 import com.pos.repository.MpesaTransactionRepository;
+import com.pos.repository.ProductRepository;
 import com.pos.repository.SaleRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -47,6 +50,7 @@ public class MpesaService {
     private final RestTemplate restTemplate = new RestTemplate();
     private final MpesaTransactionRepository transactionRepository;
     private final SaleRepository saleRepository;
+    private final ProductRepository productRepository;
     private final PaymentNotificationService notificationService;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
@@ -191,11 +195,25 @@ public class MpesaService {
                 transaction.setMpesaReceiptNumber(callback.getMpesaReceiptNumber());
                 transaction.setStatus(MpesaTransaction.TransactionStatus.SUCCESS);
 
-                // Update associated sale
+                // Update associated sale and deduct stock
                 Sale sale = transaction.getSale();
                 if (sale != null) {
                     sale.setStatus("SUCCESS");
                     saleRepository.save(sale);
+                    // Deduct stock only on payment success
+                    if (sale.getItems() != null) {
+                        for (SaleItem item : sale.getItems()) {
+                            if (item.getProduct() != null) {
+                                Product product = productRepository.findById(item.getProduct().getId()).orElse(null);
+                                if (product != null) {
+                                    int newStock = Math.max(0, product.getStockQuantity() - item.getQuantity());
+                                    product.setStockQuantity(newStock);
+                                    productRepository.save(product);
+                                    log.info("Stock updated for {}: -{} -> {}", product.getName(), item.getQuantity(), newStock);
+                                }
+                            }
+                        }
+                    }
                     log.info("Sale {} marked as SUCCESS", sale.getTransactionId());
                 }
 

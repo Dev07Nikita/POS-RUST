@@ -1,10 +1,15 @@
 package com.pos.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.pos.dto.MpesaCheckoutRequest;
+import com.pos.dto.MpesaCheckoutResponse;
 import com.pos.dto.MpesaStkCallbackDto;
 import com.pos.model.MpesaTransaction;
+import com.pos.model.Sale;
 import com.pos.repository.MpesaTransactionRepository;
 import com.pos.service.MpesaService;
+import com.pos.service.SaleService;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
@@ -20,8 +25,33 @@ import java.util.Map;
 public class MpesaController {
 
     private final MpesaService mpesaService;
+    private final SaleService saleService;
     private final MpesaTransactionRepository transactionRepository;
     private final ObjectMapper objectMapper = new ObjectMapper();
+
+    /**
+     * Initiate M-Pesa STK Push checkout. Creates a PENDING sale, triggers STK Push,
+     * and returns checkout details. Stock is deducted when M-Pesa callback confirms success.
+     */
+    @PostMapping("/checkout")
+    public ResponseEntity<?> checkout(@Valid @RequestBody MpesaCheckoutRequest request) {
+        try {
+            Sale sale = saleService.createSaleForMpesa(request.getCustomerPhone(), request.getItems());
+            MpesaTransaction transaction = mpesaService.triggerStkPush(sale);
+
+            MpesaCheckoutResponse response = MpesaCheckoutResponse.builder()
+                    .transactionId(sale.getTransactionId())
+                    .checkoutRequestId(transaction.getCheckoutRequestId())
+                    .merchantRequestId(transaction.getMerchantRequestId())
+                    .customerMessage("STK Push sent to " + request.getCustomerPhone() + ". Please complete payment on your phone.")
+                    .build();
+
+            return ResponseEntity.ok(response);
+        } catch (RuntimeException e) {
+            log.warn("M-Pesa checkout failed: {}", e.getMessage());
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
 
     /**
      * STK Push callback endpoint - receives payment status from M-Pesa
