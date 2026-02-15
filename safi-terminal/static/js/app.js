@@ -53,11 +53,41 @@ async function handleLogin() {
         if (response.ok && data.success) {
             // Extract user data from response
             const userData = data.user;
+
+            // Extract role - handle multiple roles and pick the highest priority
+            let userRole = 'USER';
+            if (userData.roles && userData.roles.length > 0) {
+                // Role priority: ADMIN > MANAGER > SALES > CASHIER > LOGISTICS > USER
+                const rolePriority = {
+                    'ADMIN': 1,
+                    'MANAGER': 2,
+                    'SALES': 3,
+                    'CASHIER': 4,
+                    'LOGISTICS': 5,
+                    'USER': 6
+                };
+
+                let highestPriorityRole = null;
+                let highestPriority = 999;
+
+                userData.roles.forEach(roleObj => {
+                    // Handle both "ROLE_NAME" and "NAME" formats
+                    let roleName = roleObj.name.replace('ROLE_', '');
+                    let priority = rolePriority[roleName] || 999;
+
+                    if (priority < highestPriority) {
+                        highestPriority = priority;
+                        highestPriorityRole = roleName;
+                    }
+                });
+
+                userRole = highestPriorityRole || 'USER';
+            }
+
             state.user = {
                 name: userData.fullName || userData.username,
-                role: userData.roles && userData.roles.length > 0
-                    ? userData.roles[0].name.replace('ROLE_', '')
-                    : 'USER'
+                role: userRole,
+                username: userData.username
             };
 
             console.log("Login successful:", state.user);
