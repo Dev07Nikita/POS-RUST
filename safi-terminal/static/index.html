@@ -510,6 +510,20 @@
         </div>
     </div>
 
+    <!-- Custom Notification Modal (replaces alert) -->
+    <div id="custom-notify-modal"
+        class="fixed inset-0 bg-black/80 hidden flex items-center justify-center backdrop-blur-md z-[70]">
+        <div class="bg-slate-900 border-2 border-slate-700 w-[420px] p-8 rounded-3xl shadow-2xl relative animate-in">
+            <div class="text-center" id="notify-content">
+                <p id="notify-icon" class="text-6xl mb-4">📊</p>
+                <h3 id="notify-title" class="text-xl font-black text-amber-500 mb-3">NOTIFICATION</h3>
+                <p id="notify-message" class="text-slate-300 text-sm leading-relaxed whitespace-pre-line"></p>
+            </div>
+            <button onclick="closeNotification()"
+                class="mt-6 w-full py-4 gold-gradient rounded-2xl font-bold text-lg">OK</button>
+        </div>
+    </div>
+
     <script src="js/app.js"></script>
     <script>
         if ('serviceWorker' in navigator) {

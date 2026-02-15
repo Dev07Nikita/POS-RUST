@@ -136,17 +136,17 @@ async function handleSignUp() {
 
     // Validation
     if (!fullName || !username || !email || !password) {
-        alert("Please fill in all fields");
+        showNotification('Please fill in all fields', '⚠️', 'Validation Error');
         return;
     }
 
     if (username.length < 3) {
-        alert("Username must be at least 3 characters");
+        showNotification('Username must be at least 3 characters', '⚠️', 'Validation Error');
         return;
     }
 
     if (password.length < 6) {
-        alert("Password must be at least 6 characters");
+        showNotification('Password must be at least 6 characters', '⚠️', 'Validation Error');
         return;
     }
 
@@ -168,14 +168,14 @@ async function handleSignUp() {
         if (response.ok && data.success) {
             const userRole = data.user && data.user.roles && data.user.roles.length > 0
                 ? data.user.roles[0].name : role;
-            alert(`✅ Registration successful!\n\nUsername: ${username}\nRole: ${userRole}\n\nPlease login with your credentials.`);
+            showNotification(`Registration successful!\n\nUsername: ${username}\nRole: ${userRole}\n\nPlease login with your credentials.`, '✅', 'Success');
             switchAuthState('login');
         } else {
-            alert(data.message || "Registration failed. Please try again.");
+            showNotification(data.message || 'Registration failed. Please try again.', '❌', 'Registration Failed');
         }
     } catch (e) {
         console.error("Registration error:", e);
-        alert("Could not connect to backend. Please ensure the server is running on port 8080.");
+        showNotification('Could not connect to backend. Please ensure the server is running on port 8080.', '❌', 'Connection Error');
     }
 }
 
@@ -545,12 +545,47 @@ function openModal(content) {
     const modalBox = document.getElementById('payment-content');
     if (modalBox) {
         modalBox.innerHTML = content;
-        UI.mpesaModal.classList.remove('hidden');
     }
 }
 
 function closeModal() {
-    UI.mpesaModal.classList.add('hidden');
+    UI.receiptModal.classList.add('hidden');
+}
+
+// Custom notification to replace alert() and remove "localhost:3000 says"
+function showNotification(message, icon = '📊', title = 'Notification') {
+    const modal = document.getElementById('custom-notify-modal');
+    document.getElementById('notify-icon').innerText = icon;
+    document.getElementById('notify-title').innerText = title;
+    document.getElementById('notify-message').innerText = message;
+    modal.classList.remove('hidden');
+}
+
+function closeNotification() {
+    document.getElementById('custom-notify-modal').classList.add('hidden');
+}
+
+async function generateSalesReport() {
+    const html = `
+        <h2 class="text-2xl font-bold mb-6">Add New Product</h2>
+        <div class="space-y-4">
+            <input id="p-code" type="text" placeholder="Barcode/Code" class="w-full bg-slate-900 p-4 rounded-xl border border-slate-700">
+            <input id="p-name" type="text" placeholder="Product Name" class="w-full bg-slate-900 p-4 rounded-xl border border-slate-700">
+            <div class="grid grid-cols-2 gap-4">
+                <input id="p-price" type="number" placeholder="Price" class="w-full bg-slate-900 p-4 rounded-xl border border-slate-700">
+                <input id="p-stock" type="number" placeholder="Stock" class="w-full bg-slate-900 p-4 rounded-xl border border-slate-700">
+            </div>
+            <select id="p-category" class="w-full bg-slate-900 p-4 rounded-xl border border-slate-700 text-slate-400">
+                <option value="Retail">Retail</option>
+                <option value="Bakery">Bakery</option>
+                <option value="Electronics">Electronics</option>
+                <option value="Groceries">Groceries</option>
+            </select>
+            <button onclick="saveProduct()" class="w-full py-4 gold-gradient rounded-xl font-bold text-lg">SAVE PRODUCT</button>
+            <button onclick="closeModal()" class="w-full text-slate-500 text-sm mt-4">Cancel</button>
+        </div>
+    `;
+    openModal(html);
 }
 
 function openAddProductModal() {
@@ -623,11 +658,11 @@ async function saveProduct(id = null) {
             loadInventory();
         } else {
             const errorText = await response.text();
-            alert(`Failed to save (Status: ${response.status}): ${errorText}`);
+            showNotification(`Failed to save (Status: ${response.status}): ${errorText}`, '❌', 'Save Error');
         }
     } catch (e) {
-        console.error("Save Error:", e);
-        alert("Network Error: Could not connect to Hub on port 8080. Ensure the Spring Boot backend is running.");
+        console.error("Network error saving product:", e);
+        showNotification('Network Error: Could not connect to Hub on port 8080. Ensure the Spring Boot backend is running.', '❌', 'Connection Error');
     }
 }
 
@@ -741,7 +776,7 @@ function renderCart() {
 }
 
 function openPaymentModal(method) {
-    if (state.cart.length === 0) return alert("Cart is empty");
+    if (state.cart.length === 0) return showNotification('Please add items to cart first', '🛒', 'Cart Empty');
 
     let content = "";
     if (method === 'M-PESA') {
@@ -802,7 +837,7 @@ function setMpesaMode(mode) {
 }
 
 async function triggerPayment(method) {
-    if (state.cart.length === 0) return alert("Cart is empty");
+    if (state.cart.length === 0) return showNotification('Please add items to cart first', '🛒', 'Cart Empty');
 
     const phoneEl = document.getElementById('pay-phone');
     const sale = {
@@ -822,6 +857,15 @@ async function triggerPayment(method) {
         if (!response.ok) throw new Error("Payment failed at terminal");
 
         const result = await response.json();
+
+        // Show success notification
+        const paymentName = method === 'CASH' ? 'Cash' : method === 'MPESA_STK' ? 'M-Pesa' : method;
+        showNotification(
+            `Payment successful!\n\nPayment Method: ${paymentName}\nAmount: KES ${state.cart.reduce((s, i) => s + (i.price * i.quantity), 0).toLocaleString()}\n\nAnalytics updated.`,
+            '✅',
+            'Payment Complete'
+        );
+
         showReceipt(result.qr_code);
         state.cart = [];
         renderCart();
@@ -830,14 +874,14 @@ async function triggerPayment(method) {
         await syncProductsFromHub();
 
         // Refresh analytics immediately
-        setTimeout(() => loadAnalytics(), 500);
+        setTimeout(() => loadAnalytics(), 300);
     } catch (e) {
-        alert("Transaction Failed: " + e.message);
+        showNotification('Transaction Failed: ' + e.message, '❌', 'Payment Error');
     }
 }
 
 function processCash() {
-    if (state.cart.length === 0) return alert("Cart is empty");
+    if (state.cart.length === 0) return showNotification('Please add items to cart first', '🛒', 'Cart Empty');
 
     const total = state.cart.reduce((s, i) => s + (i.price * i.quantity), 0);
     const content = `
@@ -890,6 +934,25 @@ function closeReceipt() {
     renderCart();
 }
 
+// Custom notification to replace alert() and remove "localhost:3000 says"
+function showNotification(message, icon = '📊', title = 'Notification') {
+    const modal = document.getElementById('custom-notify-modal');
+    if (!modal) {
+        console.error('Notification modal not found');
+        return;
+    }
+    document.getElementById('notify-icon').innerText = icon;
+    document.getElementById('notify-title').innerText = title;
+    document.getElementById('notify-message').innerText = message;
+    modal.classList.remove('hidden');
+}
+
+function closeNotification() {
+    const modal = document.getElementById('custom-notify-modal');
+    if (modal) modal.classList.add('hidden');
+}
+
+
 async function generateSalesReport() {
     // Fetch real transaction data
     let reportData = null;
@@ -903,7 +966,7 @@ async function generateSalesReport() {
     // Fallback to cached analytics
     if (!reportData) reportData = state.lastAnalytics;
     if (!reportData) {
-        alert('❌ No analytics data available.\n\nPlease ensure the backend is running and try again after making some sales.');
+        showNotification('No analytics data available.\n\nPlease ensure the backend is running and try again after making some sales.', '❌', 'No Data');
         return;
     }
 
@@ -915,7 +978,7 @@ async function generateSalesReport() {
 
     // Notify user if no transactions
     if (sales.length === 0 && totalOrders === 0) {
-        alert('📊 No transactions recorded today.\n\nThe daily report will show zero sales. Make some transactions first!');
+        showNotification('No transactions recorded today.\n\nThe daily report will show zero sales. Make some transactions first!', '📊', 'Empty Report');
     }
 
     // Build transaction rows
