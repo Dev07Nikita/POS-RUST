@@ -41,3 +41,8 @@ dependencies {
 tasks.withType<Test> {
     useJUnitPlatform()
 }
+
+// Explicit encoding to avoid compiler/daemon issues on Windows
+tasks.withType<JavaCompile>().configureEach {
+    options.encoding = "UTF-8"
+}
