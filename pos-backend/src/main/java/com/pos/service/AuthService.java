@@ -48,14 +48,15 @@ public class AuthService {
 
         // First user ever registered automatically becomes ADMIN
         boolean isFirstUser = userRepository.count() == 0;
+        final String assignedRole = isFirstUser ? "ADMIN" : roleName;
+
         if (isFirstUser) {
-            roleName = "ADMIN";
             log.info("First user registration — auto-assigning ADMIN role to: {}", username);
         }
 
         // Get or create role
-        Role role = roleRepository.findByName(roleName)
-                .orElseGet(() -> roleRepository.save(Role.builder().name(roleName).build()));
+        Role role = roleRepository.findByName(assignedRole)
+                .orElseGet(() -> roleRepository.save(Role.builder().name(assignedRole).build()));
 
         Set<Role> roles = new HashSet<>();
         roles.add(role);
@@ -81,7 +82,7 @@ public class AuthService {
 
         String signupDetails = isFirstUser
                 ? "First admin account created (auto-assigned ADMIN + MANAGER)"
-                : "New account created as " + roleName;
+                : "New account created as " + assignedRole;
 
         auditLogRepository.save(AuditLog.builder()
                 .username(username)
@@ -89,7 +90,7 @@ public class AuthService {
                 .details(signupDetails)
                 .build());
 
-        log.info("User registered successfully: {} as {}", username, roleName);
+        log.info("User registered successfully: {} as {}", username, assignedRole);
         return saved;
     }
 
