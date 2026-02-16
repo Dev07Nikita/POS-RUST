@@ -26,6 +26,9 @@ public class SaleService {
 
     @Transactional
     public Sale processSale(Sale sale) {
+        if (sale == null || sale.getItems() == null || sale.getItems().isEmpty()) {
+            throw new RuntimeException("Sale and items are required");
+        }
         sale.setTransactionId(UUID.randomUUID().toString());
         sale.setTimestamp(LocalDateTime.now());
         sale.setStatus("PENDING");
@@ -76,6 +79,9 @@ public class SaleService {
      */
     @Transactional
     public Sale createSaleForMpesa(String customerPhone, List<CartItemDto> items) {
+        if (customerPhone == null || items == null || items.isEmpty()) {
+            throw new RuntimeException("Customer phone and at least one item are required");
+        }
         List<SaleItem> saleItems = new ArrayList<>();
         double totalAmount = 0;
 

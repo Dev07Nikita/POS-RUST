@@ -34,7 +34,11 @@ public class AdminController {
     @GetMapping("/dashboard")
     public ResponseEntity<Map<String, Object>> getDashboard() {
         List<User> users = authService.getAllUsers();
-        users.forEach(u -> u.setPassword(null));
+        if (users != null) {
+            users.forEach(u -> { if (u != null) u.setPassword(null); });
+        } else {
+            users = List.of();
+        }
 
         List<AuditLog> auditLogs = auditLogRepository.findAll(
                 Sort.by(Sort.Direction.DESC, "timestamp"));

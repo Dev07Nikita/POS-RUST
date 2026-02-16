@@ -1,6 +1,5 @@
 package com.pos.service;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.pos.dto.*;
 import com.pos.model.AuditLog;
 import com.pos.model.MpesaTransaction;
@@ -55,7 +54,6 @@ public class MpesaService {
     private final ProductRepository productRepository;
     private final AuditLogRepository auditLogRepository;
     private final PaymentNotificationService notificationService;
-    private final ObjectMapper objectMapper = new ObjectMapper();
 
     // Token caching
     private String cachedToken;
@@ -82,7 +80,11 @@ public class MpesaService {
 
         try {
             ResponseEntity<Map> response = restTemplate.exchange(url, HttpMethod.GET, entity, Map.class);
-            cachedToken = (String) response.getBody().get("access_token");
+            Map<?, ?> body = response.getBody();
+            if (body == null || !body.containsKey("access_token")) {
+                throw new RuntimeException("M-Pesa authentication failed: no access_token in response");
+            }
+            cachedToken = (String) body.get("access_token");
 
             // Token expires in 3600 seconds, cache for 3500 to be safe
             tokenExpiry = LocalDateTime.now().plusSeconds(3500);
@@ -288,10 +290,10 @@ public class MpesaService {
 
             ResponseEntity<Map> response = restTemplate.postForEntity(url, entity, Map.class);
 
-            log.info("Transaction status query response: {}", response.getBody());
+            Map<String, Object> responseBody = response.getBody();
+            log.info("Transaction status query response: {}", responseBody);
 
             // Process the response similar to callback
-            Map<String, Object> responseBody = response.getBody();
             if (responseBody != null) {
                 String resultCode = String.valueOf(responseBody.get("ResultCode"));
 
