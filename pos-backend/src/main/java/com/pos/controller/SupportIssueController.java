@@ -30,4 +30,27 @@ public class SupportIssueController {
             issue.setStatus("OPEN");
         return supportIssueRepository.save(issue);
     }
+
+    @PutMapping("/{id}")
+    public ResponseEntity<SupportIssue> updateIssue(@PathVariable Long id, @RequestBody SupportIssue updates) {
+        return supportIssueRepository.findById(id)
+                .map(issue -> {
+                    if (updates.getStatus() != null)
+                        issue.setStatus(updates.getStatus());
+                    if (updates.getMessage() != null)
+                        issue.setMessage(updates.getMessage());
+                    return ResponseEntity.ok(supportIssueRepository.save(issue));
+                })
+                .orElse(ResponseEntity.notFound().build());
+    }
+
+    @PatchMapping("/{id}/resolve")
+    public ResponseEntity<SupportIssue> resolveIssue(@PathVariable Long id) {
+        return supportIssueRepository.findById(id)
+                .map(issue -> {
+                    issue.setStatus("RESOLVED");
+                    return ResponseEntity.ok(supportIssueRepository.save(issue));
+                })
+                .orElse(ResponseEntity.notFound().build());
+    }
 }

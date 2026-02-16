@@ -2,10 +2,12 @@ package com.pos.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.pos.dto.*;
+import com.pos.model.AuditLog;
 import com.pos.model.MpesaTransaction;
 import com.pos.model.Sale;
 import com.pos.model.SaleItem;
 import com.pos.model.Product;
+import com.pos.repository.AuditLogRepository;
 import com.pos.repository.MpesaTransactionRepository;
 import com.pos.repository.ProductRepository;
 import com.pos.repository.SaleRepository;
@@ -51,6 +53,7 @@ public class MpesaService {
     private final MpesaTransactionRepository transactionRepository;
     private final SaleRepository saleRepository;
     private final ProductRepository productRepository;
+    private final AuditLogRepository auditLogRepository;
     private final PaymentNotificationService notificationService;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
@@ -215,6 +218,12 @@ public class MpesaService {
                         }
                     }
                     log.info("Sale {} marked as SUCCESS", sale.getTransactionId());
+                    auditLogRepository.save(AuditLog.builder()
+                            .username("POS")
+                            .action("SALE")
+                            .details("M-PESA sale " + sale.getTransactionId() + " KES " + sale.getTotalAmount() + " Receipt " + callback.getMpesaReceiptNumber())
+                            .ipAddress(null)
+                            .build());
                 }
 
                 log.info("M-Pesa payment SUCCESS: Receipt={}, Amount={}",

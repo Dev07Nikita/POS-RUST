@@ -1,9 +1,11 @@
 package com.pos.service;
 
 import com.pos.dto.CartItemDto;
+import com.pos.model.AuditLog;
 import com.pos.model.Sale;
 import com.pos.model.SaleItem;
 import com.pos.model.Product;
+import com.pos.repository.AuditLogRepository;
 import com.pos.repository.SaleRepository;
 import com.pos.repository.ProductRepository;
 import lombok.RequiredArgsConstructor;
@@ -20,6 +22,7 @@ import java.util.UUID;
 public class SaleService {
     private final SaleRepository saleRepository;
     private final ProductRepository productRepository;
+    private final AuditLogRepository auditLogRepository;
 
     @Transactional
     public Sale processSale(Sale sale) {
@@ -56,6 +59,12 @@ public class SaleService {
         if ("CASH".equalsIgnoreCase(sale.getPaymentMethod())) {
             savedSale.setStatus("SUCCESS");
             saleRepository.save(savedSale);
+            auditLogRepository.save(AuditLog.builder()
+                    .username("POS")
+                    .action("SALE")
+                    .details("CASH sale " + savedSale.getTransactionId() + " KES " + savedSale.getTotalAmount())
+                    .ipAddress(null)
+                    .build());
         }
 
         return savedSale;
