@@ -1,7 +1,8 @@
 package com.pos.config;
 
+import com.pos.model.Product;
 import com.pos.model.Role;
-import com.pos.model.AuditLog;
+import com.pos.repository.ProductRepository;
 import com.pos.repository.RoleRepository;
 import com.pos.repository.UserRepository;
 import com.pos.repository.AuditLogRepository;
@@ -22,6 +23,7 @@ public class DataInitializer implements CommandLineRunner {
     private final RoleRepository roleRepository;
     private final UserRepository userRepository;
     private final AuditLogRepository auditLogRepository;
+    private final ProductRepository productRepository;
 
     @Override
     @Transactional
@@ -47,6 +49,15 @@ public class DataInitializer implements CommandLineRunner {
             log.info("==============================================");
         } else {
             log.info("{} user(s) found in database", userRepository.count());
+        }
+
+        // Seed sample products if none exist (for POS UI and analytics)
+        if (productRepository.count() == 0) {
+            productRepository.save(Product.builder().code("001").name("Tindi Coffee").price(250.0).stockQuantity(50).category("Drinks").build());
+            productRepository.save(Product.builder().code("002").name("Premium Tea").price(150.0).stockQuantity(80).category("Drinks").build());
+            productRepository.save(Product.builder().code("003").name("Glazed Donut").price(100.0).stockQuantity(30).category("Snacks").build());
+            productRepository.save(Product.builder().code("004").name("Beef Burger").price(450.0).stockQuantity(20).category("Food").build());
+            log.info("Seeded 4 sample products");
         }
     }
 }

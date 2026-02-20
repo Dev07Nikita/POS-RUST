@@ -1,10 +1,14 @@
 package com.pos.service;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.pos.dto.*;
+import com.pos.model.AuditLog;
 import com.pos.model.MpesaTransaction;
 import com.pos.model.Sale;
+import com.pos.model.SaleItem;
+import com.pos.model.Product;
+import com.pos.repository.AuditLogRepository;
 import com.pos.repository.MpesaTransactionRepository;
+import com.pos.repository.ProductRepository;
 import com.pos.repository.SaleRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -47,8 +51,9 @@ public class MpesaService {
     private final RestTemplate restTemplate = new RestTemplate();
     private final MpesaTransactionRepository transactionRepository;
     private final SaleRepository saleRepository;
+    private final ProductRepository productRepository;
+    private final AuditLogRepository auditLogRepository;
     private final PaymentNotificationService notificationService;
-    private final ObjectMapper objectMapper = new ObjectMapper();
 
     // Token caching
     private String cachedToken;
@@ -75,7 +80,11 @@ public class MpesaService {
 
         try {
             ResponseEntity<Map> response = restTemplate.exchange(url, HttpMethod.GET, entity, Map.class);
-            cachedToken = (String) response.getBody().get("access_token");
+            Map<?, ?> body = response.getBody();
+            if (body == null || !body.containsKey("access_token")) {
+                throw new RuntimeException("M-Pesa authentication failed: no access_token in response");
+            }
+            cachedToken = (String) body.get("access_token");
 
             // Token expires in 3600 seconds, cache for 3500 to be safe
             tokenExpiry = LocalDateTime.now().plusSeconds(3500);
@@ -191,12 +200,32 @@ public class MpesaService {
                 transaction.setMpesaReceiptNumber(callback.getMpesaReceiptNumber());
                 transaction.setStatus(MpesaTransaction.TransactionStatus.SUCCESS);
 
-                // Update associated sale
+                // Update associated sale and deduct stock
                 Sale sale = transaction.getSale();
                 if (sale != null) {
                     sale.setStatus("SUCCESS");
                     saleRepository.save(sale);
+                    // Deduct stock only on payment success
+                    if (sale.getItems() != null) {
+                        for (SaleItem item : sale.getItems()) {
+                            if (item.getProduct() != null) {
+                                Product product = productRepository.findById(item.getProduct().getId()).orElse(null);
+                                if (product != null) {
+                                    int newStock = Math.max(0, product.getStockQuantity() - item.getQuantity());
+                                    product.setStockQuantity(newStock);
+                                    productRepository.save(product);
+                                    log.info("Stock updated for {}: -{} -> {}", product.getName(), item.getQuantity(), newStock);
+                                }
+                            }
+                        }
+                    }
                     log.info("Sale {} marked as SUCCESS", sale.getTransactionId());
+                    auditLogRepository.save(AuditLog.builder()
+                            .username("POS")
+                            .action("SALE")
+                            .details("M-PESA sale " + sale.getTransactionId() + " KES " + sale.getTotalAmount() + " Receipt " + callback.getMpesaReceiptNumber())
+                            .ipAddress(null)
+                            .build());
                 }
 
                 log.info("M-Pesa payment SUCCESS: Receipt={}, Amount={}",
@@ -261,10 +290,10 @@ public class MpesaService {
 
             ResponseEntity<Map> response = restTemplate.postForEntity(url, entity, Map.class);
 
-            log.info("Transaction status query response: {}", response.getBody());
+            Map<String, Object> responseBody = response.getBody();
+            log.info("Transaction status query response: {}", responseBody);
 
             // Process the response similar to callback
-            Map<String, Object> responseBody = response.getBody();
             if (responseBody != null) {
                 String resultCode = String.valueOf(responseBody.get("ResultCode"));
 
