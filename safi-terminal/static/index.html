@@ -404,6 +404,46 @@
             </div>
         </section>
 
+        <!-- Logistics View -->
+        <section id="viewLogistics" class="glass rounded-3xl p-6 overflow-y-auto flex flex-col hidden">
+            <div class="flex justify-between items-center mb-6">
+                <div>
+                    <h2 class="text-2xl font-bold">Logistics & Stock Control</h2>
+                    <p class="text-xs text-slate-400 mt-1">Real-time inventory levels and restock alerts</p>
+                </div>
+                <button onclick="loadLogistics()"
+                    class="px-5 py-2 glass rounded-xl font-bold text-sm border border-slate-600 hover:border-amber-500">
+                    🔄 Refresh
+                </button>
+            </div>
+            <div id="logistics-content" class="flex-grow">
+                <div class="text-center py-16 text-slate-500">
+                    <p class="text-5xl mb-4">📦</p>
+                    <p class="font-bold">Loading logistics data...</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Admin Hub View -->
+        <section id="viewAdmin" class="glass rounded-3xl p-6 overflow-y-auto flex flex-col hidden">
+            <div class="flex justify-between items-center mb-6">
+                <div>
+                    <h2 class="text-2xl font-bold">Admin Hub</h2>
+                    <p class="text-xs text-slate-400 mt-1">User management and audit trail</p>
+                </div>
+                <button onclick="loadAdminHub()"
+                    class="px-5 py-2 glass rounded-xl font-bold text-sm border border-slate-600 hover:border-amber-500">
+                    🔄 Refresh
+                </button>
+            </div>
+            <div id="admin-content" class="flex-grow">
+                <div class="text-center py-16 text-slate-500">
+                    <p class="text-5xl mb-4">🔐</p>
+                    <p class="font-bold">Loading admin data...</p>
+                </div>
+            </div>
+        </section>
+
         <!-- Cart Area with Scrollable Payment Options -->
         <aside class="glass rounded-3xl p-6 flex flex-col h-full relative overflow-hidden">
             <!-- Cart Header -->
@@ -507,6 +547,16 @@
             <p class="text-center text-[10px] text-slate-400 mb-6">Scan QR to verify transaction authenticity</p>
             <button onclick="closeReceipt()" class="w-full py-4 gold-gradient rounded-2xl font-bold text-white">PRINT &
                 CLOSE</button>
+        </div>
+    </div>
+
+    <!-- Edit / Add Product Modal (separate from payment modal) -->
+    <div id="edit-modal"
+        class="fixed inset-0 bg-black/80 hidden flex items-center justify-center backdrop-blur-md z-[110]">
+        <div class="glass w-[520px] max-h-[90vh] overflow-y-auto p-10 rounded-[2.5rem] border border-amber-500/20">
+            <div id="edit-content" class="text-center">
+                <!-- Edit content injected via JS -->
+            </div>
         </div>
     </div>
 

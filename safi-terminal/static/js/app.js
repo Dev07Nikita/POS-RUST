@@ -335,7 +335,7 @@ async function syncProductsFromHub() {
 }
 
 function switchView(view) {
-    const views = ['viewCheckout', 'viewInventory', 'viewAnalytics', 'viewSupport'];
+    const views = ['viewCheckout', 'viewInventory', 'viewAnalytics', 'viewSupport', 'viewLogistics', 'viewAdmin'];
     views.forEach(id => {
         const el = document.getElementById(id);
         if (el) el.classList.add('hidden');
@@ -356,6 +356,12 @@ function switchView(view) {
     } else if (view === 'support') {
         document.getElementById('viewSupport').classList.remove('hidden');
         loadIssues();
+    } else if (view === 'logistics') {
+        const logView = document.getElementById('viewLogistics');
+        if (logView) { logView.classList.remove('hidden'); loadLogistics(); }
+    } else if (view === 'admin') {
+        const adminView = document.getElementById('viewAdmin');
+        if (adminView) { adminView.classList.remove('hidden'); loadAdminHub(); }
     }
 }
 
@@ -545,11 +551,12 @@ function openModal(content) {
     const modalBox = document.getElementById('payment-content');
     if (modalBox) {
         modalBox.innerHTML = content;
+        UI.mpesaModal.classList.remove('hidden'); // Show the modal!
     }
 }
 
 function closeModal() {
-    UI.receiptModal.classList.add('hidden');
+    UI.mpesaModal.classList.add('hidden'); // Close payment modal, not receipt
 }
 
 // Custom notification to replace alert() and remove "localhost:3000 says"
@@ -590,59 +597,123 @@ async function generateSalesReport() {
 
 function openAddProductModal() {
     const html = `
-        <h2 class="text-2xl font-bold mb-6">Add New Product</h2>
-        <div class="space-y-4">
-            <input id="p-code" type="text" placeholder="Barcode/Code" class="w-full bg-slate-900 p-4 rounded-xl border border-slate-700">
-            <input id="p-name" type="text" placeholder="Product Name" class="w-full bg-slate-900 p-4 rounded-xl border border-slate-700">
-            <div class="grid grid-cols-2 gap-4">
-                <input id="p-price" type="number" placeholder="Price" class="w-full bg-slate-900 p-4 rounded-xl border border-slate-700">
-                <input id="p-stock" type="number" placeholder="Stock" class="w-full bg-slate-900 p-4 rounded-xl border border-slate-700">
+        <h2 class="text-2xl font-bold mb-6">➕ Add New Product</h2>
+        <div class="space-y-4 text-left">
+            <div>
+                <label class="text-xs text-slate-400 font-bold uppercase mb-1 block">Barcode / Code</label>
+                <input id="p-code" type="text" placeholder="e.g. SKU-001" class="w-full bg-slate-800 p-4 rounded-xl border border-slate-700 text-white outline-none focus:border-amber-500">
             </div>
-            <select id="p-category" class="w-full bg-slate-900 p-4 rounded-xl border border-slate-700 text-slate-400">
-                <option value="Retail">Retail</option>
-                <option value="Bakery">Bakery</option>
-                <option value="Electronics">Electronics</option>
-                <option value="Groceries">Groceries</option>
-            </select>
-            <button onclick="saveProduct()" class="w-full py-4 gold-gradient rounded-xl font-bold text-lg">SAVE PRODUCT</button>
-            <button onclick="closeModal()" class="w-full text-slate-500 text-sm mt-4">Cancel</button>
+            <div>
+                <label class="text-xs text-slate-400 font-bold uppercase mb-1 block">Product Name</label>
+                <input id="p-name" type="text" placeholder="e.g. Maize Flour 2kg" class="w-full bg-slate-800 p-4 rounded-xl border border-slate-700 text-white outline-none focus:border-amber-500">
+            </div>
+            <div class="grid grid-cols-2 gap-4">
+                <div>
+                    <label class="text-xs text-slate-400 font-bold uppercase mb-1 block">Price (KES)</label>
+                    <input id="p-price" type="number" placeholder="0" class="w-full bg-slate-800 p-4 rounded-xl border border-slate-700 text-white outline-none focus:border-amber-500">
+                </div>
+                <div>
+                    <label class="text-xs text-slate-400 font-bold uppercase mb-1 block">Stock Qty</label>
+                    <input id="p-stock" type="number" placeholder="0" class="w-full bg-slate-800 p-4 rounded-xl border border-slate-700 text-white outline-none focus:border-amber-500">
+                </div>
+            </div>
+            <div>
+                <label class="text-xs text-slate-400 font-bold uppercase mb-1 block">Category</label>
+                <select id="p-category" class="w-full bg-slate-800 p-4 rounded-xl border border-slate-700 text-white outline-none focus:border-amber-500">
+                    <option value="Retail">Retail</option>
+                    <option value="Bakery">Bakery</option>
+                    <option value="Electronics">Electronics</option>
+                    <option value="Groceries">Groceries</option>
+                    <option value="Beverages">Beverages</option>
+                </select>
+            </div>
+            <button onclick="saveProduct()" class="w-full py-4 gold-gradient rounded-xl font-bold text-lg mt-2">SAVE PRODUCT</button>
+            <button onclick="closeEditModal()" class="w-full text-slate-500 text-sm">Cancel</button>
         </div>
     `;
-    openModal(html);
+    openEditModal(html);
 }
 
 function openEditProductModal(id) {
     const p = state.products.find(x => x.id === id);
+    if (!p) return;
     const html = `
-        <h2 class="text-2xl font-bold mb-6">Edit Product</h2>
-        <div class="space-y-4">
-            <input id="p-code" type="text" value="${p.code}" class="w-full bg-slate-900 p-4 rounded-xl border border-slate-700">
-            <input id="p-name" type="text" value="${p.name}" class="w-full bg-slate-900 p-4 rounded-xl border border-slate-700">
-            <div class="grid grid-cols-2 gap-4">
-                <input id="p-price" type="number" value="${p.price}" class="w-full bg-slate-900 p-4 rounded-xl border border-slate-700">
-                <input id="p-stock" type="number" value="${p.stockQuantity || p.stock || 0}" class="w-full bg-slate-900 p-4 rounded-xl border border-slate-700">
+        <h2 class="text-2xl font-bold mb-6">✏️ Edit Product</h2>
+        <div class="space-y-4 text-left">
+            <div>
+                <label class="text-xs text-slate-400 font-bold uppercase mb-1 block">Barcode / Code</label>
+                <input id="p-code" type="text" value="${p.code}" class="w-full bg-slate-800 p-4 rounded-xl border border-slate-700 text-white outline-none focus:border-amber-500">
             </div>
-            <select id="p-category" class="w-full bg-slate-900 p-4 rounded-xl border border-slate-700 text-slate-400">
-                <option value="Retail" ${p.category === 'Retail' ? 'selected' : ''}>Retail</option>
-                <option value="Bakery" ${p.category === 'Bakery' ? 'selected' : ''}>Bakery</option>
-                <option value="Electronics" ${p.category === 'Electronics' ? 'selected' : ''}>Electronics</option>
-                <option value="Groceries" ${p.category === 'Groceries' ? 'selected' : ''}>Groceries</option>
-            </select>
-            <button onclick="saveProduct(${id})" class="w-full py-4 gold-gradient rounded-xl font-bold text-lg">UPDATE PRODUCT</button>
-            <button onclick="closeModal()" class="w-full text-slate-500 text-sm mt-4">Cancel</button>
+            <div>
+                <label class="text-xs text-slate-400 font-bold uppercase mb-1 block">Product Name</label>
+                <input id="p-name" type="text" value="${p.name}" class="w-full bg-slate-800 p-4 rounded-xl border border-slate-700 text-white outline-none focus:border-amber-500">
+            </div>
+            <div class="grid grid-cols-2 gap-4">
+                <div>
+                    <label class="text-xs text-slate-400 font-bold uppercase mb-1 block">Price (KES)</label>
+                    <input id="p-price" type="number" value="${p.price}" class="w-full bg-slate-800 p-4 rounded-xl border border-slate-700 text-white outline-none focus:border-amber-500">
+                </div>
+                <div>
+                    <label class="text-xs text-slate-400 font-bold uppercase mb-1 block">Stock Qty</label>
+                    <input id="p-stock" type="number" value="${p.stockQuantity || p.stock || 0}" class="w-full bg-slate-800 p-4 rounded-xl border border-slate-700 text-white outline-none focus:border-amber-500">
+                </div>
+            </div>
+            <div>
+                <label class="text-xs text-slate-400 font-bold uppercase mb-1 block">Category</label>
+                <select id="p-category" class="w-full bg-slate-800 p-4 rounded-xl border border-slate-700 text-white outline-none">
+                    <option value="Retail" ${p.category === 'Retail' ? 'selected' : ''}>Retail</option>
+                    <option value="Bakery" ${p.category === 'Bakery' ? 'selected' : ''}>Bakery</option>
+                    <option value="Electronics" ${p.category === 'Electronics' ? 'selected' : ''}>Electronics</option>
+                    <option value="Groceries" ${p.category === 'Groceries' ? 'selected' : ''}>Groceries</option>
+                    <option value="Beverages" ${p.category === 'Beverages' ? 'selected' : ''}>Beverages</option>
+                </select>
+            </div>
+            <button onclick="saveProduct(${id})" class="w-full py-4 gold-gradient rounded-xl font-bold text-lg mt-2">UPDATE PRODUCT</button>
+            <button onclick="closeEditModal()" class="w-full text-slate-500 text-sm">Cancel</button>
         </div>
     `;
-    openModal(html);
+    openEditModal(html);
+}
+
+// Edit modal uses a separate modal from the payment modal
+function openEditModal(content) {
+    const modal = document.getElementById('edit-modal');
+    const box = document.getElementById('edit-content');
+    if (modal && box) {
+        box.innerHTML = content;
+        modal.classList.remove('hidden');
+    }
+}
+
+function closeEditModal() {
+    const modal = document.getElementById('edit-modal');
+    if (modal) modal.classList.add('hidden');
 }
 
 async function saveProduct(id = null) {
+    const codeEl = document.getElementById('p-code');
+    const nameEl = document.getElementById('p-name');
+    const priceEl = document.getElementById('p-price');
+    const stockEl = document.getElementById('p-stock');
+    const catEl = document.getElementById('p-category');
+
+    if (!codeEl || !nameEl || !priceEl || !stockEl || !catEl) {
+        showNotification('Form fields not found. Please reopen the edit window.', '❌', 'Error');
+        return;
+    }
+
     const product = {
-        code: document.getElementById('p-code').value,
-        name: document.getElementById('p-name').value,
-        price: parseFloat(document.getElementById('p-price').value),
-        stockQuantity: parseInt(document.getElementById('p-stock').value),
-        category: document.getElementById('p-category').value
+        code: codeEl.value.trim(),
+        name: nameEl.value.trim(),
+        price: parseFloat(priceEl.value),
+        stockQuantity: parseInt(stockEl.value),
+        category: catEl.value
     };
+
+    if (!product.code || !product.name || isNaN(product.price) || isNaN(product.stockQuantity)) {
+        showNotification('Please fill in all fields correctly.', '⚠️', 'Validation Error');
+        return;
+    }
 
     const url = id ? `http://localhost:8080/api/products/${id}` : 'http://localhost:8080/api/products';
     const method = id ? 'PUT' : 'POST';
@@ -654,36 +725,151 @@ async function saveProduct(id = null) {
             body: JSON.stringify(product)
         });
         if (response.ok) {
-            closeModal();
-            loadInventory();
+            closeEditModal();
+            showNotification(`Product "${product.name}" ${id ? 'updated' : 'added'} successfully!`, '✅', 'Saved');
+            await loadInventory();
+            await syncProductsFromHub();
         } else {
             const errorText = await response.text();
             showNotification(`Failed to save (Status: ${response.status}): ${errorText}`, '❌', 'Save Error');
         }
     } catch (e) {
-        console.error("Network error saving product:", e);
-        showNotification('Network Error: Could not connect to Hub on port 8080. Ensure the Spring Boot backend is running.', '❌', 'Connection Error');
+        console.error('Network error saving product:', e);
+        showNotification('Network Error: Could not connect to Hub on port 8080.', '❌', 'Connection Error');
+    }
+}
+
+async function loadLogistics() {
+    const content = document.getElementById('logistics-content');
+    if (!content) return;
+    content.innerHTML = '<p class="text-slate-500 text-sm text-center py-8">Loading logistics data...</p>';
+    try {
+        const response = await fetch('http://localhost:8080/api/products');
+        if (response.ok) {
+            const products = await response.json();
+            const lowStock = products.filter(p => (p.stockQuantity || 0) <= 5);
+            content.innerHTML = `
+                <div class="grid grid-cols-3 gap-4 mb-6">
+                    <div class="bg-slate-800 p-5 rounded-2xl border border-slate-700">
+                        <p class="text-slate-400 text-xs font-bold uppercase mb-1">Total Products</p>
+                        <p class="text-3xl font-black text-white">${products.length}</p>
+                    </div>
+                    <div class="bg-red-900/30 p-5 rounded-2xl border border-red-500/30">
+                        <p class="text-red-400 text-xs font-bold uppercase mb-1">Low Stock Items</p>
+                        <p class="text-3xl font-black text-red-400">${lowStock.length}</p>
+                    </div>
+                    <div class="bg-green-900/30 p-5 rounded-2xl border border-green-500/30">
+                        <p class="text-green-400 text-xs font-bold uppercase mb-1">Well Stocked</p>
+                        <p class="text-3xl font-black text-green-400">${products.length - lowStock.length}</p>
+                    </div>
+                </div>
+                <h3 class="font-bold text-sm text-slate-400 uppercase tracking-wider mb-3">Stock Overview</h3>
+                <div class="space-y-2">
+                    ${products.map(p => {
+                const stock = p.stockQuantity || 0;
+                const pct = Math.min(100, (stock / 50) * 100);
+                const color = stock <= 5 ? 'bg-red-500' : stock <= 15 ? 'bg-amber-500' : 'bg-green-500';
+                return `
+                        <div class="bg-slate-800 p-4 rounded-xl border border-slate-700">
+                            <div class="flex justify-between items-center mb-2">
+                                <span class="font-bold text-sm">${p.name}</span>
+                                <span class="text-xs font-black ${stock <= 5 ? 'text-red-400 animate-pulse' : 'text-slate-400'}">QTY: ${stock}</span>
+                            </div>
+                            <div class="w-full bg-slate-700 rounded-full h-2">
+                                <div class="${color} h-2 rounded-full transition-all" style="width:${pct}%"></div>
+                            </div>
+                            ${stock <= 5 ? '<p class="text-[10px] text-red-400 font-bold mt-1">⚠️ RESTOCK NEEDED</p>' : ''}
+                        </div>`;
+            }).join('')}
+                </div>
+            `;
+        } else {
+            content.innerHTML = '<p class="text-slate-500 text-center py-8">Could not load logistics data.</p>';
+        }
+    } catch (e) {
+        content.innerHTML = '<div class="text-center py-12"><p class="text-4xl mb-3">📦</p><p class="text-slate-400 font-bold">Backend not reachable</p><p class="text-slate-500 text-sm mt-2">Ensure Spring Boot is running on port 8080</p></div>';
+    }
+}
+
+async function loadAdminHub() {
+    const content = document.getElementById('admin-content');
+    if (!content) return;
+    content.innerHTML = '<p class="text-slate-500 text-sm text-center py-8">Loading admin data...</p>';
+    try {
+        const [usersResp, logsResp] = await Promise.all([
+            fetch('http://localhost:8080/api/auth/users'),
+            fetch('http://localhost:8080/api/auth/logs/all')
+        ]);
+        const users = usersResp.ok ? await usersResp.json() : [];
+        const logs = logsResp.ok ? await logsResp.json() : [];
+        content.innerHTML = `
+            <div class="grid grid-cols-2 gap-4 mb-6">
+                <div class="bg-slate-800 p-5 rounded-2xl border border-slate-700">
+                    <p class="text-slate-400 text-xs font-bold uppercase mb-1">Registered Users</p>
+                    <p class="text-3xl font-black text-white">${users.length}</p>
+                </div>
+                <div class="bg-slate-800 p-5 rounded-2xl border border-slate-700">
+                    <p class="text-slate-400 text-xs font-bold uppercase mb-1">Audit Log Entries</p>
+                    <p class="text-3xl font-black text-amber-500">${logs.length}</p>
+                </div>
+            </div>
+            <h3 class="font-bold text-sm text-slate-400 uppercase tracking-wider mb-3">Registered Users</h3>
+            <div class="space-y-2 mb-6">
+                ${users.map(u => {
+            const role = u.roles && u.roles[0] ? u.roles[0].name : 'USER';
+            return `<div class="bg-slate-800 p-4 rounded-xl border border-slate-700 flex justify-between items-center">
+                        <div><p class="font-bold">${u.fullName || u.username}</p><p class="text-xs text-slate-500">@${u.username}</p></div>
+                        <span class="px-3 py-1 rounded-full text-[10px] font-black ${role === 'ADMIN' ? 'bg-red-600' : role === 'MANAGER' ? 'bg-blue-600' : 'bg-slate-700'} text-white">${role}</span>
+                    </div>`;
+        }).join('')}
+            </div>
+            <h3 class="font-bold text-sm text-slate-400 uppercase tracking-wider mb-3">Recent Audit Logs</h3>
+            <div class="space-y-2">
+                ${logs.slice(-20).reverse().map(l => `
+                    <div class="bg-slate-800 p-3 rounded-xl border border-slate-700 flex justify-between items-center">
+                        <div><span class="text-xs font-black text-amber-500">${l.action}</span> <span class="text-xs text-slate-300">by ${l.username}</span></div>
+                        <span class="text-[10px] text-slate-500">${new Date(l.timestamp).toLocaleString()}</span>
+                    </div>`).join('')}
+            </div>
+        `;
+    } catch (e) {
+        content.innerHTML = '<div class="text-center py-12"><p class="text-4xl mb-3">🔐</p><p class="text-slate-400 font-bold">Admin data unavailable</p></div>';
     }
 }
 
 function applyPermissions(role) {
     const permissions = {
-        'ADMIN': ['menuInventory', 'menuReports', 'menuLogistics', 'menuAdmin'],
-        'MANAGER': ['menuInventory', 'menuReports'],
-        'LOGISTICS': ['menuLogistics'],
-        'CASHIER': [],
-        'SALES': ['menuReports']
+        'ADMIN': ['menuInventory', 'menuReports', 'menuLogistics', 'menuAdmin', 'menuSupport'],
+        'MANAGER': ['menuInventory', 'menuReports', 'menuSupport'],
+        'LOGISTICS': ['menuLogistics', 'menuSupport'],
+        'CASHIER': ['menuSupport'],
+        'SALES': ['menuReports', 'menuSupport'],
+        'USER': ['menuSupport']
     };
 
-    ['menuInventory', 'menuReports', 'menuLogistics', 'menuAdmin'].forEach(id => {
+    // Hide all privileged menus first
+    ['menuInventory', 'menuReports', 'menuLogistics', 'menuAdmin', 'menuSupport'].forEach(id => {
         const el = document.getElementById(id);
         if (el) el.classList.add('hidden');
     });
 
+    // Show allowed menus
     (permissions[role] || []).forEach(id => {
         const el = document.getElementById(id);
         if (el) el.classList.remove('hidden');
     });
+
+    // Wire up Logistics menu click
+    const logisticsBtn = document.getElementById('menuLogistics');
+    if (logisticsBtn) {
+        logisticsBtn.onclick = () => switchView('logistics');
+    }
+
+    // Wire up Admin menu click
+    const adminBtn = document.getElementById('menuAdmin');
+    if (adminBtn) {
+        adminBtn.onclick = () => switchView('admin');
+    }
 }
 
 function renderProducts() {
@@ -711,7 +897,22 @@ function renderProducts() {
 
 function addToCart(pid) {
     const product = state.products.find(p => p.id === pid);
+    if (!product) return;
+
+    const stock = product.stockQuantity || product.stock || 0;
     const existing = state.cart.find(i => i.id === pid);
+    const currentQtyInCart = existing ? existing.quantity : 0;
+
+    // Stock check
+    if (currentQtyInCart >= stock) {
+        showNotification(
+            `Only ${stock} unit(s) of "${product.name}" available in stock.\n\nYou cannot add more than the available quantity.`,
+            '⚠️',
+            'Stock Limit Reached'
+        );
+        return;
+    }
+
     if (existing) existing.quantity++;
     else state.cart.push({ ...product, quantity: 1 });
     renderCart();
