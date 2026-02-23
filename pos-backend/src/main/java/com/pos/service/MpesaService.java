@@ -39,11 +39,21 @@ public class MpesaService {
     @Value("${mpesa.passkey:YOUR_PASSKEY}")
     private String passkey;
 
-    @Value("${mpesa.shortcode:174379}")
+    // STK Push shortcode (PayBill or Till)
+    @Value("${mpesa.shortcode:600991}")
     private String shortCode;
 
+    // C2B registration shortcode (may differ from STK shortcode in sandbox)
+    @Value("${mpesa.c2b.shortcode:${mpesa.shortcode:600991}}")
+    private String c2bShortCode;
+
+    // Base callback URL — e.g. https://your-ngrok-url.ngrok.io/api/mpesa/callback
     @Value("${mpesa.callback.url:http://YOUR_HOST/api/mpesa/callback}")
     private String callbackUrl;
+
+    // Public base URL for building C2B confirmation/validation URLs
+    @Value("${mpesa.public.url:${mpesa.callback.url:http://YOUR_HOST/api/mpesa/callback}}")
+    private String publicBaseUrl;
 
     @Value("${mpesa.environment:sandbox}")
     private String environment;
@@ -214,7 +224,8 @@ public class MpesaService {
                                     int newStock = Math.max(0, product.getStockQuantity() - item.getQuantity());
                                     product.setStockQuantity(newStock);
                                     productRepository.save(product);
-                                    log.info("Stock updated for {}: -{} -> {}", product.getName(), item.getQuantity(), newStock);
+                                    log.info("Stock updated for {}: -{} -> {}", product.getName(), item.getQuantity(),
+                                            newStock);
                                 }
                             }
                         }
@@ -223,7 +234,8 @@ public class MpesaService {
                     auditLogRepository.save(AuditLog.builder()
                             .username("POS")
                             .action("SALE")
-                            .details("M-PESA sale " + sale.getTransactionId() + " KES " + sale.getTotalAmount() + " Receipt " + callback.getMpesaReceiptNumber())
+                            .details("M-PESA sale " + sale.getTransactionId() + " KES " + sale.getTotalAmount()
+                                    + " Receipt " + callback.getMpesaReceiptNumber())
                             .ipAddress(null)
                             .build());
                 }
@@ -347,28 +359,76 @@ public class MpesaService {
     }
 
     /**
-     * Register C2B URLs
+     * Register C2B URLs with M-Pesa using the v2 endpoint.
+     *
+     * Sandbox endpoint: POST /mpesa/c2b/v2/registerurl
+     * Required payload:
+     * ShortCode — Your C2B shortcode (600991 for sandbox)
+     * ResponseType — "Completed" (process even if validation URL is unreachable)
+     * ConfirmationURL — publicly reachable URL that receives confirmed payments
+     * ValidationURL — publicly reachable URL that validates incoming payments
+     *
+     * Expected success response:
+     * { "OriginatorCoversationID": "...", "ResponseCode": "00000000",
+     * "ResponseDescription": "Success" }
+     * Note: Safaricom has a known typo — "CoversationID" instead of
+     * "ConversationID".
      */
-    public void registerUrls() {
+    @SuppressWarnings("unchecked")
+    public String registerUrls() {
         try {
             String token = getAccessToken();
+
+            // Derive the public base (strip /callback suffix if present so we can rebuild
+            // cleanly)
+            String base = publicBaseUrl.replaceAll("/api/mpesa/callback.*$", "");
+            String confirmationUrl = base + "/api/mpesa/callback/confirmation";
+            String validationUrl = base + "/api/mpesa/callback/validation";
+
             Map<String, Object> body = new HashMap<>();
-            body.put("ShortCode", shortCode);
+            body.put("ShortCode", c2bShortCode);
             body.put("ResponseType", "Completed");
-            body.put("ConfirmationURL", callbackUrl + "/confirmation");
-            body.put("ValidationURL", callbackUrl + "/validation");
+            body.put("ConfirmationURL", confirmationUrl);
+            body.put("ValidationURL", validationUrl);
+
+            log.info("Registering C2B URLs — ShortCode={}, ConfirmationURL={}, ValidationURL={}",
+                    c2bShortCode, confirmationUrl, validationUrl);
 
             HttpHeaders headers = new HttpHeaders();
             headers.setContentType(MediaType.APPLICATION_JSON);
             headers.setBearerAuth(token);
 
             HttpEntity<Map<String, Object>> entity = new HttpEntity<>(body, headers);
-            String url = getBaseUrl() + "/mpesa/c2b/v1/registerurl";
 
-            restTemplate.postForEntity(url, entity, String.class);
-            log.info("M-Pesa C2B URLs Registered");
+            // Use v2 endpoint as required by current Daraja API
+            String url = getBaseUrl() + "/mpesa/c2b/v2/registerurl";
+
+            ResponseEntity<Map> response = restTemplate.postForEntity(url, entity, Map.class);
+            Map<String, Object> resp = response.getBody();
+
+            if (resp != null) {
+                // Safaricom deliberately spells "CoversationID" (missing an 'n') — match
+                // exactly.
+                String originatorId = String.valueOf(resp.getOrDefault("OriginatorCoversationID", "N/A"));
+                String responseCode = String.valueOf(resp.getOrDefault("ResponseCode", "N/A"));
+                String responseDesc = String.valueOf(resp.getOrDefault("ResponseDescription", "N/A"));
+
+                if ("00000000".equals(responseCode)) {
+                    log.info("C2B URL Registration SUCCESS — OriginatorCoversationID={}, Description={}",
+                            originatorId, responseDesc);
+                } else {
+                    log.warn("C2B URL Registration returned unexpected code={} description={} originatorId={}",
+                            responseCode, responseDesc, originatorId);
+                }
+                return responseDesc;
+            }
+
+            log.warn("C2B URL Registration returned empty body");
+            return "No response body";
+
         } catch (Exception e) {
-            log.error("C2B Registration Failed: {}", e.getMessage());
+            log.error("C2B Registration Failed: {}", e.getMessage(), e);
+            throw new RuntimeException("C2B URL registration failed: " + e.getMessage(), e);
         }
     }
 

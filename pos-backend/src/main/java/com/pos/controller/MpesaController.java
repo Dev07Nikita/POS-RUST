@@ -31,7 +31,8 @@ public class MpesaController {
 
     /**
      * Initiate M-Pesa STK Push checkout. Creates a PENDING sale, triggers STK Push,
-     * and returns checkout details. Stock is deducted when M-Pesa callback confirms success.
+     * and returns checkout details. Stock is deducted when M-Pesa callback confirms
+     * success.
      */
     @PostMapping("/checkout")
     public ResponseEntity<?> checkout(@Valid @RequestBody MpesaCheckoutRequest request) {
@@ -43,7 +44,8 @@ public class MpesaController {
                     .transactionId(sale.getTransactionId())
                     .checkoutRequestId(transaction.getCheckoutRequestId())
                     .merchantRequestId(transaction.getMerchantRequestId())
-                    .customerMessage("STK Push sent to " + request.getCustomerPhone() + ". Please complete payment on your phone.")
+                    .customerMessage("STK Push sent to " + request.getCustomerPhone()
+                            + ". Please complete payment on your phone.")
                     .build();
 
             return ResponseEntity.ok(response);
@@ -121,13 +123,15 @@ public class MpesaController {
     }
 
     /**
-     * Register C2B URLs with M-Pesa
+     * Register C2B URLs with M-Pesa (v2 endpoint).
+     * Triggers POST /mpesa/c2b/v2/registerurl on Safaricom Daraja API.
+     * Call this endpoint once to register your confirmation/validation URLs.
      */
     @GetMapping("/register")
     public ResponseEntity<String> registerUrls() {
         try {
-            mpesaService.registerUrls();
-            return ResponseEntity.ok("C2B URLs Registration Initiated Successfully");
+            String result = mpesaService.registerUrls();
+            return ResponseEntity.ok("C2B URLs Registered Successfully: " + result);
         } catch (Exception e) {
             log.error("URL registration failed: {}", e.getMessage());
             return ResponseEntity.internalServerError().body("Registration failed: " + e.getMessage());
