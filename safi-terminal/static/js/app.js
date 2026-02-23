@@ -994,9 +994,13 @@ function openPaymentModal(method) {
             </div>
 
             <div id="mpesa-module-content" class="animate-in fade-in zoom-in duration-300">
-                <!-- Initial view is STK -->
-                <input id="pay-phone" type="text" placeholder="07XX XXX XXX" class="w-full bg-slate-800 border-2 border-slate-700 rounded-2xl py-4 px-6 mb-4 text-center text-xl font-bold tracking-widest outline-none focus:border-green-500">
-                <button onclick="triggerPayment('M-PESA STK')" class="w-full py-5 gold-gradient rounded-2xl font-black text-lg">SEND STK PROMPT</button>
+                <!-- Default: STK mode -->
+                <p class="text-xs text-slate-400 text-left mb-1 font-bold uppercase tracking-wider">Customer Phone Number</p>
+                <input id="pay-phone" type="tel" placeholder="e.g. 0712 345 678"
+                    class="w-full bg-slate-800 border-2 border-slate-700 rounded-2xl py-4 px-6 mb-1 text-center text-xl font-bold tracking-widest outline-none focus:border-green-500"
+                    oninput="previewPhone(this.value)">
+                <p id="phone-preview" class="text-[11px] text-green-400 text-center mb-4 h-4"></p>
+                <button onclick="triggerMpesaStk()" class="w-full py-5 gold-gradient rounded-2xl font-black text-lg">📲 SEND STK PROMPT</button>
             </div>
             
             <button onclick="closeModal()" class="mt-6 text-slate-500 text-sm hover:text-slate-300">Cancel Payment</button>
@@ -1018,22 +1022,179 @@ function setMpesaMode(mode) {
     const container = document.getElementById('mpesa-module-content');
     if (mode === 'STK') {
         container.innerHTML = `
-            <input id="pay-phone" type="text" placeholder="07XX XXX XXX" class="w-full bg-slate-800 border-2 border-slate-700 rounded-2xl py-4 px-6 mb-4 text-center text-xl font-bold tracking-widest outline-none focus:border-green-500">
-            <button onclick="triggerPayment('M-PESA STK')" class="w-full py-5 gold-gradient rounded-2xl font-black text-lg">SEND STK PROMPT</button>
+            <p class="text-xs text-slate-400 text-left mb-1 font-bold uppercase tracking-wider">Customer Phone Number</p>
+            <input id="pay-phone" type="tel" placeholder="e.g. 0712 345 678"
+                class="w-full bg-slate-800 border-2 border-slate-700 rounded-2xl py-4 px-6 mb-1 text-center text-xl font-bold tracking-widest outline-none focus:border-green-500"
+                oninput="previewPhone(this.value)">
+            <p id="phone-preview" class="text-[11px] text-green-400 text-center mb-4 h-4"></p>
+            <button onclick="triggerMpesaStk()" class="w-full py-5 gold-gradient rounded-2xl font-black text-lg">📲 SEND STK PROMPT</button>
         `;
     } else if (mode === 'C2B') {
         container.innerHTML = `
             <div class="bg-slate-900/50 p-6 rounded-3xl border border-slate-700 mb-6 text-left">
                 <p class="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">Instructions</p>
-                <p class="text-sm text-slate-300 leading-relaxed">1. Go to M-Pesa Menu<br>2. Lipa na M-Pesa<br>3. Enter <strong>Paybill: 174379</strong><br>4. Enter Amount & PIN</p>
+                <p class="text-sm text-slate-300 leading-relaxed">1. Go to M-Pesa Menu<br>2. Lipa na M-Pesa<br>3. Enter <strong>Paybill: 600991</strong><br>4. Enter Amount &amp; PIN</p>
             </div>
             <button onclick="triggerPayment('M-PESA C2B')" class="w-full py-5 glass border-blue-500/50 rounded-2xl font-black text-lg text-blue-400">FINALIZE AFTER PAYMENT</button>
         `;
     } else if (mode === 'SEND') {
         container.innerHTML = `
-            <input id="pay-phone" type="text" placeholder="Recipient Number" class="w-full bg-slate-800 border-2 border-slate-700 rounded-2xl py-4 px-6 mb-4 text-center text-xl font-bold tracking-widest outline-none focus:border-amber-500">
+            <p class="text-xs text-slate-400 text-left mb-1 font-bold uppercase tracking-wider">Recipient Number</p>
+            <input id="pay-phone" type="tel" placeholder="e.g. 0712 345 678"
+                class="w-full bg-slate-800 border-2 border-slate-700 rounded-2xl py-4 px-6 mb-1 text-center text-xl font-bold tracking-widest outline-none focus:border-amber-500"
+                oninput="previewPhone(this.value)">
+            <p id="phone-preview" class="text-[11px] text-green-400 text-center mb-4 h-4"></p>
             <button onclick="triggerPayment('M-PESA SEND')" class="w-full py-5 glass border-amber-500/50 rounded-2xl font-black text-lg text-amber-500">SEND MONEY TO PHONE</button>
         `;
+    }
+}
+
+/**
+ * Normalize any Kenyan phone format to 254XXXXXXXXX (12 digits)
+ * Accepts: 07XXXXXXXX, 7XXXXXXXX, +2547XXXXXXXX, 2547XXXXXXXX
+ */
+function normalizeSafaricomPhone(raw) {
+    let phone = raw.replace(/\s+/g, '').replace(/-/g, '');
+    if (phone.startsWith('+254')) phone = phone.slice(1);       // +254 → 254
+    if (phone.startsWith('0')) phone = '254' + phone.slice(1); // 07.. → 2547..
+    if (phone.startsWith('7') || phone.startsWith('1')) phone = '254' + phone; // 7..  → 2547..
+    return phone;
+}
+
+/** Live preview under the phone input */
+function previewPhone(value) {
+    const preview = document.getElementById('phone-preview');
+    if (!preview) return;
+    if (!value.trim()) { preview.textContent = ''; return; }
+    const normalized = normalizeSafaricomPhone(value);
+    const valid = /^2547\d{8}$|^2541\d{8}$/.test(normalized);
+    preview.textContent = valid ? `✓ Will send to: ${normalized}` : '⚠ Invalid number — use 07XX or 2547XX format';
+    preview.className = `text-[11px] text-center mb-4 h-4 ${valid ? 'text-green-400' : 'text-red-400'}`;
+}
+
+/**
+ * STK Push — calls Spring Boot directly (port 8080) then polls for result.
+ * The Tauri /api/checkout DOES NOT trigger M-Pesa; Spring Boot does.
+ */
+async function triggerMpesaStk() {
+    if (state.cart.length === 0) return showNotification('Please add items to cart first', '🛒', 'Cart Empty');
+
+    const phoneEl = document.getElementById('pay-phone');
+    const rawPhone = phoneEl ? phoneEl.value.trim() : '';
+
+    if (!rawPhone) {
+        return showNotification('Please enter the customer\'s M-Pesa phone number.', '📱', 'Phone Required');
+    }
+
+    const phone = normalizeSafaricomPhone(rawPhone);
+    if (!/^254[71]\d{8}$/.test(phone)) {
+        return showNotification(
+            `Invalid phone number: "${rawPhone}"\n\nUse format: 07XXXXXXXX or 2547XXXXXXXX`,
+            '❌', 'Invalid Phone'
+        );
+    }
+
+    const total = state.cart.reduce((s, i) => s + (i.price * i.quantity), 0);
+
+    // Show waiting UI
+    const modalBox = document.getElementById('payment-content');
+    if (modalBox) {
+        modalBox.innerHTML = `
+            <div class="text-center py-4">
+                <div class="w-20 h-20 bg-green-600 rounded-3xl mx-auto mb-6 flex items-center justify-center text-white text-4xl animate-pulse">📲</div>
+                <h3 class="text-2xl font-black text-white mb-2">STK Prompt Sent!</h3>
+                <p class="text-slate-400 text-sm mb-2">Prompt sent to <strong class="text-green-400">${phone}</strong></p>
+                <p class="text-slate-500 text-xs mb-6">Ask customer to check their phone and enter M-Pesa PIN</p>
+                <div class="flex items-center justify-center gap-2 mb-6">
+                    <span class="w-2 h-2 bg-amber-500 rounded-full animate-bounce" style="animation-delay:0ms"></span>
+                    <span class="w-2 h-2 bg-amber-500 rounded-full animate-bounce" style="animation-delay:150ms"></span>
+                    <span class="w-2 h-2 bg-amber-500 rounded-full animate-bounce" style="animation-delay:300ms"></span>
+                </div>
+                <p class="text-[11px] text-slate-600">Waiting for payment confirmation... (90s timeout)</p>
+                <button onclick="closeModal()" class="mt-6 text-slate-500 text-xs hover:text-red-400">Cancel</button>
+            </div>
+        `;
+    }
+
+    try {
+        // Call Spring Boot M-Pesa checkout directly — Tauri does not handle STK
+        const response = await fetch('http://localhost:8080/api/mpesa/checkout', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                customerPhone: phone,
+                items: state.cart.map(i => ({ productId: i.id, quantity: i.quantity, unitPrice: i.price }))
+            })
+        });
+
+        if (!response.ok) {
+            const err = await response.json().catch(() => ({ error: 'Unknown error' }));
+            throw new Error(err.error || `Server error ${response.status}`);
+        }
+
+        const result = await response.json();
+        const checkoutRequestId = result.checkoutRequestId;
+
+        // Poll for confirmation (every 4s, up to 90s)
+        let attempts = 0;
+        const maxAttempts = 22;
+        const poll = setInterval(async () => {
+            attempts++;
+            try {
+                const statusResp = await fetch(`http://localhost:8080/api/mpesa/transaction/${checkoutRequestId}`);
+                if (statusResp.ok) {
+                    const tx = await statusResp.json();
+                    if (tx.status === 'SUCCESS') {
+                        clearInterval(poll);
+                        // Record locally in Tauri for analytics
+                        await fetch('/api/checkout', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                items: state.cart.map(i => ({ product_id: i.id, quantity: i.quantity })),
+                                payment_method: 'M-PESA STK',
+                                customer_phone: phone,
+                                cashier_name: state.user ? state.user.name : 'Cashier'
+                            })
+                        }).catch(() => { });
+
+                        closeModal();
+                        showNotification(
+                            `M-Pesa Payment Confirmed! ✓\n\nReceipt: ${tx.mpesaReceiptNumber || 'N/A'}\nAmount: KES ${total.toLocaleString()}\nPhone: ${phone}`,
+                            '✅', 'Payment Successful'
+                        );
+                        state.cart = [];
+                        renderCart();
+                        setTimeout(() => loadAnalytics(), 500);
+                        await syncProductsFromHub();
+
+                    } else if (tx.status === 'FAILED' || tx.status === 'CANCELLED') {
+                        clearInterval(poll);
+                        closeModal();
+                        showNotification(
+                            `M-Pesa payment was ${tx.status.toLowerCase()}.\n\n${tx.resultDescription || 'Customer may have cancelled or entered wrong PIN.'}`,
+                            '❌', 'Payment Failed'
+                        );
+                    }
+                }
+            } catch (e) { /* ignore poll errors */ }
+
+            if (attempts >= maxAttempts) {
+                clearInterval(poll);
+                closeModal();
+                showNotification(
+                    'STK prompt timed out.\n\nThe customer did not respond within 90 seconds. Please try again.',
+                    '⏱️', 'Payment Timeout'
+                );
+            }
+        }, 4000);
+
+    } catch (e) {
+        closeModal();
+        showNotification(
+            `STK Push Failed: ${e.message}\n\nCheck that:\n• Spring Boot is running on port 8080\n• M-Pesa credentials are set in application.properties\n• ngrok is running and callback URL is set`,
+            '❌', 'M-Pesa Error'
+        );
     }
 }
 
