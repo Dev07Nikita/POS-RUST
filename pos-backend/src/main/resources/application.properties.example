@@ -1,0 +1,32 @@
+server.port=8080
+spring.application.name=pos-backend
+spring.datasource.url=jdbc:sqlite:pos.db
+spring.datasource.driver-class-name=org.sqlite.JDBC
+spring.jpa.database-platform=org.hibernate.community.dialect.SQLiteDialect
+spring.jpa.hibernate.ddl-auto=update
+spring.jpa.show-sql=false
+
+# =============================================================
+# M-Pesa Daraja API Configuration (EXAMPLE FILE — safe to commit)
+# Copy this file to application.properties and fill in your values,
+# OR run: .\start-mpesa-tunnel.ps1 -ConsumerKey X -ConsumerSecret Y -Passkey Z
+#
+# Get credentials:
+#   1. https://developer.safaricom.co.ke/MyApps → Log in
+#   2. Open / create your App
+#   3. Copy "Consumer Key" and "Consumer Secret"
+#   4. Go to "Lipa Na M-Pesa" tab → copy "Online Passkey"
+# =============================================================
+
+mpesa.environment=sandbox
+
+mpesa.consumer.key=YOUR_CONSUMER_KEY_HERE
+mpesa.consumer.secret=YOUR_CONSUMER_SECRET_HERE
+mpesa.passkey=YOUR_PASSKEY_HERE
+
+mpesa.shortcode=600991
+mpesa.c2b.shortcode=600991
+
+# Run start-mpesa-tunnel.ps1 — it will fill these in automatically
+mpesa.public.url=https://YOUR_NGROK_URL.ngrok-free.app
+mpesa.callback.url=https://YOUR_NGROK_URL.ngrok-free.app/api/mpesa/callback

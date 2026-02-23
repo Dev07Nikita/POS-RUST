@@ -26,6 +26,15 @@
 # Dependencies
 node_modules/
 .env
+.env.*
+
+# M-Pesa secrets — NEVER commit real credentials
+pos-backend/src/main/resources/application.properties
+# (commit application.properties.example instead — see that file)
+
+# ngrok binary
+ngrok.exe
+ngrok
 
 # Windows-specific
 Thumbs.db
