@@ -26,25 +26,11 @@ public class PaymentGateway {
                     throw e;
                 }
             }
-            case "BANK_KCB" -> triggerKcbPayment(sale);
-            case "BANK_EQUITY" -> triggerEquityPayment(sale);
             case "CASH" -> finalizeCashPayment(sale);
             default -> throw new IllegalArgumentException("Unknown payment method: " + sale.getPaymentMethod());
         }
 
         return sale;
-    }
-
-    private void triggerKcbPayment(Sale sale) {
-        log.info("KCB API call for transaction {}", sale.getTransactionId());
-        // Integration with BUNI API
-        sale.setStatus("PENDING");
-    }
-
-    private void triggerEquityPayment(Sale sale) {
-        log.info("Equity Jenga API call for transaction {}", sale.getTransactionId());
-        // Integration with Jenga API
-        sale.setStatus("PENDING");
     }
 
     private void finalizeCashPayment(Sale sale) {
