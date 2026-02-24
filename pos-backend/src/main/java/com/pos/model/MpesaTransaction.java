@@ -3,6 +3,7 @@ package com.pos.model;
 import jakarta.persistence.*;
 import lombok.*;
 import java.time.LocalDateTime;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 
 @Entity
 @Table(name = "mpesa_transactions")
@@ -24,6 +25,7 @@ public class MpesaTransaction {
     @Column(unique = true)
     private String mpesaReceiptNumber; // From callback (success only)
 
+    @JsonIgnore // Prevents Jackson circular reference: MpesaTransaction → Sale → items
     @ManyToOne
     @JoinColumn(name = "sale_id")
     private Sale sale;
