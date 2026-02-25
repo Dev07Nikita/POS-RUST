@@ -11,6 +11,10 @@ const state = {
     filters: {
         search: '',
         category: 'All'
+    },
+    analytics: {
+        period: 'daily',
+        data: null
     }
 };
 
@@ -472,79 +476,169 @@ async function submitIssue() {
     }
 }
 
-async function loadAnalytics() {
-    let data = null;
+/** Period selector: daily | monthly | yearly */
+function setAnalyticsPeriod(period) {
+    state.analytics.period = period;
 
-    // Try local Tauri analytics first (instant, always available)
-    try {
-        const localResp = await fetch('/api/local-analytics');
-        if (localResp.ok) {
-            data = await localResp.json();
-            console.log('Analytics loaded from local terminal');
-        }
-    } catch (e) {
-        console.warn('Local analytics not available, trying Spring Boot...');
-    }
-
-    // Fallback to Spring Boot central hub
-    if (!data) {
-        try {
-            const hubResp = await fetch('http://localhost:8080/api/analytics/summary');
-            if (hubResp.ok) {
-                data = await hubResp.json();
-                console.log('Analytics loaded from Spring Boot Hub');
+    // Update UI active state
+    ['Daily', 'Monthly', 'Yearly'].forEach(p => {
+        const btn = document.getElementById(`period${p}`);
+        if (btn) {
+            if (p.toLowerCase() === period) {
+                btn.className = "px-4 py-2 rounded-lg text-xs font-black transition-all bg-amber-500 text-slate-900";
+            } else {
+                btn.className = "px-4 py-2 rounded-lg text-xs font-black transition-all text-slate-400 hover:text-white";
             }
-        } catch (e) {
-            console.warn('Spring Boot analytics also unavailable.');
+        }
+    });
+
+    loadAnalytics();
+}
+
+/** Legacy alias for the polling interval */
+async function loadAnalytics() {
+    return loadAnalyticsReport();
+}
+
+/** Main data loader for the analytics dashboard */
+async function loadAnalyticsReport() {
+    const period = state.analytics.period;
+    const label = document.getElementById('analyticsPeriodLabel');
+    if (label) label.innerText = `Loading ${period} data...`;
+
+    try {
+        const response = await fetch(`http://localhost:8080/api/analytics/report?period=${period}`);
+        if (!response.ok) throw new Error("Analytics Fetch Failed");
+
+        const data = await response.json();
+        state.analytics.data = data;
+
+        renderAnalyticsUI(data);
+
+        if (label) label.innerText = data.periodLabel || `Data for ${period}`;
+    } catch (e) {
+        console.error("Analytics Error:", e);
+        if (label) label.innerText = "Error loading analytics. Check Connection.";
+    }
+}
+
+/** Updates all the cards, lists and charts on the analytics page */
+function renderAnalyticsUI(data) {
+    // 1. KPI Cards
+    document.getElementById('kpiRevenue').innerText = `KES ${(data.revenue || 0).toLocaleString()}`;
+    document.getElementById('kpiCost').innerText = `KES ${(data.cost || 0).toLocaleString()}`;
+    document.getElementById('kpiProfit').innerText = `KES ${(data.profit || 0).toLocaleString()}`;
+
+    document.getElementById('kpiAvgOrder').innerText = `Avg: KES ${(data.avgOrder || 0).toLocaleString()}`;
+    document.getElementById('kpiOrders').innerText = `${data.orders || 0} transactions`;
+    document.getElementById('kpiMargin').innerText = `Margin: ${data.profitMargin || 0}%`;
+
+    // 2. Simple Chart Rendering (SVG-based bars)
+    renderAnalyticsChart(data);
+
+    // 3. Payment Method Breakdown
+    const pmt = document.getElementById('paymentBreakdown');
+    if (pmt) {
+        const brk = data.paymentBreakdown || {};
+        pmt.innerHTML = Object.entries(brk).map(([key, val]) => {
+            const icons = { cash: '💵', mpesa: '📱', bank: '🏦' };
+            const colors = { cash: 'text-green-500', mpesa: 'text-amber-500', bank: 'text-blue-500' };
+            return `
+                <div class="flex items-center justify-between p-3 bg-slate-900/40 rounded-xl border border-slate-700/50">
+                    <div class="flex items-center gap-3">
+                        <span class="text-xl">${icons[key.toLowerCase()] || '💰'}</span>
+                        <div>
+                            <p class="text-[10px] font-black uppercase text-slate-500">${key}</p>
+                            <p class="text-xs font-bold text-slate-300">${val.count} orders</p>
+                        </div>
+                    </div>
+                    <p class="font-black ${colors[key.toLowerCase()] || 'text-white'}">KES ${val.total.toLocaleString()}</p>
+                </div>
+            `;
+        }).join('');
+    }
+
+    // 4. Top Products List
+    const products = document.getElementById('topProductsList');
+    if (products) {
+        const list = data.topProducts || [];
+        if (list.length === 0) {
+            products.innerHTML = `<p class="text-slate-500 text-xs italic p-4 text-center">No product data for this period</p>`;
+        } else {
+            products.innerHTML = list.map((p, i) => `
+                <div class="flex items-center justify-between p-3 bg-slate-900/40 rounded-xl">
+                    <div class="flex items-center gap-3">
+                        <span class="w-6 h-6 rounded bg-slate-800 flex items-center justify-center text-[10px] font-black text-slate-500">${i + 1}</span>
+                        <div>
+                            <p class="text-xs font-bold text-slate-200">${p.name}</p>
+                            <p class="text-[10px] text-slate-500">${p.quantity} units sold</p>
+                        </div>
+                    </div>
+                    <p class="text-xs font-black text-amber-500">KES ${p.revenue.toLocaleString()}</p>
+                </div>
+            `).join('');
         }
     }
 
-    if (!data) return;
-
-    // Update stats display
-    document.getElementById('statRevenue').innerText = `KES ${(data.totalRevenue || 0).toLocaleString()}`;
-    document.getElementById('statOrders').innerText = data.totalOrders || 0;
-
-    // Store analytics data globally for daily report
-    state.lastAnalytics = data;
-
-    // Render recent sales
+    // 5. Recent Transactions
     const recent = document.getElementById('analytics-recent-sales');
     if (recent) {
         const sales = data.recentSales || [];
         if (sales.length === 0) {
-            recent.innerHTML = `
-                <div class="text-center py-8 text-slate-500">
-                    <p class="text-4xl mb-3">📊</p>
-                    <p class="font-bold">No transactions today</p>
-                    <p class="text-xs mt-1">Sales will appear here as you process them</p>
-                </div>
-            `;
+            recent.innerHTML = `<p class="text-slate-500 text-xs italic p-4 text-center">No recent transactions</p>`;
         } else {
             recent.innerHTML = sales.map(s => `
-                <div class="p-4 bg-slate-900/50 rounded-2xl border border-slate-700 space-y-3 animate-in fade-in duration-300">
-                    <div class="flex justify-between items-center pb-2 border-b border-slate-800">
-                        <div>
-                            <p class="text-xs font-black text-amber-500">${(s.transactionId || '').substring(0, 8)}...</p>
-                            <p class="text-[10px] text-slate-500">${new Date(s.timestamp).toLocaleString()}</p>
-                        </div>
-                        <div class="text-right">
-                            <p class="font-black text-lg">KES ${(s.totalAmount || 0).toLocaleString()}</p>
-                            <p class="text-[9px] text-slate-400 uppercase font-bold">Via ${s.paymentMethod || 'CASH'}</p>
-                        </div>
+                <div class="flex items-center justify-between p-3 border-b border-slate-700/30 hover:bg-white/5 transition-all">
+                    <div class="flex flex-col">
+                        <span class="text-[10px] font-black text-amber-500">${(s.transactionId || '').substring(0, 8)}</span>
+                        <span class="text-[8px] uppercase text-slate-500">${s.paymentMethod} • ${s.itemCount} items</span>
                     </div>
-                    <div class="space-y-1">
-                        ${(s.items || []).map(item => `
-                            <div class="flex justify-between text-[10px]">
-                                <span class="text-slate-300">${item.productName || 'Item'} x ${item.quantity}</span>
-                                <span class="text-slate-500">KES ${(item.subtotal || 0).toLocaleString()}</span>
-                            </div>
-                        `).join('')}
+                    <div class="text-right">
+                        <p class="text-xs font-bold">KES ${s.amount.toLocaleString()}</p>
+                        <p class="text-[8px] text-slate-600">${new Date(s.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
                     </div>
                 </div>
             `).join('');
         }
     }
+}
+
+/** Draws custom SVG bars for revenue and profit */
+function renderAnalyticsChart(data) {
+    const chart = document.getElementById('analyticsChart');
+    if (!chart) return;
+
+    const revData = data.chartRevenue || {};
+    const profData = data.chartProfit || {};
+    const keys = Object.keys(revData);
+
+    if (keys.length === 0) {
+        chart.innerHTML = `<div class="w-full text-center text-slate-500 text-xs py-10 italic">No chart data for this period</div>`;
+        return;
+    }
+
+    const maxVal = Math.max(...Object.values(revData), 100);
+
+    chart.innerHTML = keys.map(key => {
+        const rev = revData[key] || 0;
+        const prof = profData[key] || 0;
+        const revHeight = (rev / maxVal) * 100;
+        const profHeight = (prof / maxVal) * 100;
+
+        return `
+            <div class="flex-grow flex flex-col items-center group relative h-full justify-end">
+                <div class="flex items-end gap-[2px] h-full w-full justify-center">
+                    <!-- Revenue Bar -->
+                    <div class="w-3 rounded-t-sm bg-amber-500/80 group-hover:bg-amber-500 transition-all shadow-sm" 
+                         style="height: ${revHeight}%" title="${key}: KES ${rev.toLocaleString()}"></div>
+                    <!-- Profit Bar -->
+                    <div class="w-3 rounded-t-sm bg-green-500/80 group-hover:bg-green-500 transition-all shadow-sm" 
+                         style="height: ${profHeight}%" title="Profit: KES ${prof.toLocaleString()}"></div>
+                </div>
+                <span class="text-[8px] text-slate-500 mt-2 font-black uppercase">${key}</span>
+            </div>
+        `;
+    }).join('');
 }
 
 function openModal(content) {
