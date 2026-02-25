@@ -21,5 +21,6 @@ public class SaleItem {
     private String productName; // Snapshot name for easy display
     private Integer quantity;
     private Double unitPrice;
+    private Double costPrice; // Snapshot cost price at time of sale
     private Double subtotal;
 }

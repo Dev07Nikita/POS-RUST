@@ -51,6 +51,7 @@ public class SaleService {
             item.setProduct(product);
             item.setProductName(product.getName());
             item.setUnitPrice(product.getPrice());
+            item.setCostPrice(product.getCostPrice() != null ? product.getCostPrice() : 0.0);
             item.setSubtotal(product.getPrice() * item.getQuantity());
         }
 
@@ -102,6 +103,7 @@ public class SaleService {
                     .productName(product.getName())
                     .quantity(dto.getQuantity())
                     .unitPrice(unitPrice)
+                    .costPrice(product.getCostPrice() != null ? product.getCostPrice() : 0.0)
                     .subtotal(subtotal)
                     .build();
             saleItems.add(item);

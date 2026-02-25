@@ -48,10 +48,7 @@ public class AnalyticsController {
             // Cost from sale items (costPrice snapshot via product lookup)
             if (s.getItems() != null) {
                 for (SaleItem item : s.getItems()) {
-                    double itemCost = 0;
-                    if (item.getProduct() != null && item.getProduct().getCostPrice() != null) {
-                        itemCost = item.getProduct().getCostPrice() * item.getQuantity();
-                    }
+                    double itemCost = (item.getCostPrice() != null ? item.getCostPrice() : 0.0) * item.getQuantity();
                     cost += itemCost;
 
                     // Top products
@@ -195,9 +192,7 @@ public class AnalyticsController {
             double saleCost = 0;
             if (s.getItems() != null) {
                 for (SaleItem item : s.getItems()) {
-                    if (item.getProduct() != null && item.getProduct().getCostPrice() != null) {
-                        saleCost += item.getProduct().getCostPrice() * item.getQuantity();
-                    }
+                    saleCost += (item.getCostPrice() != null ? item.getCostPrice() : 0.0) * item.getQuantity();
                 }
             }
             double saleProfit = s.getTotalAmount() - saleCost;
