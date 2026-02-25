@@ -29,4 +29,6 @@ public class Product {
     private Integer stockQuantity;
 
     private String category;
+
+    private Double costPrice; // Buying/cost price — used to calculate profit
 }
