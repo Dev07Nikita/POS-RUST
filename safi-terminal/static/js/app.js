@@ -476,12 +476,12 @@ async function submitIssue() {
     }
 }
 
-/** Period selector: daily | monthly | yearly */
+/** Period selector: daily | weekly | monthly | yearly */
 function setAnalyticsPeriod(period) {
     state.analytics.period = period;
 
     // Update UI active state
-    ['Daily', 'Monthly', 'Yearly'].forEach(p => {
+    ['Daily', 'Weekly', 'Monthly', 'Yearly'].forEach(p => {
         const btn = document.getElementById(`period${p}`);
         if (btn) {
             if (p.toLowerCase() === period) {
@@ -502,24 +502,87 @@ async function loadAnalytics() {
 
 /** Main data loader for the analytics dashboard */
 async function loadAnalyticsReport() {
-    const period = state.analytics.period;
+    const period = state.analytics.period || 'daily';
     const label = document.getElementById('analyticsPeriodLabel');
     if (label) label.innerText = `Loading ${period} data...`;
 
+    let data = null;
+
+    // Try Spring Boot first (primary analytics source)
     try {
-        const response = await fetch(`http://localhost:8080/api/analytics/report?period=${period}`);
-        if (!response.ok) throw new Error("Analytics Fetch Failed");
-
-        const data = await response.json();
-        state.analytics.data = data;
-
-        renderAnalyticsUI(data);
-
-        if (label) label.innerText = data.periodLabel || `Data for ${period}`;
+        const response = await fetch(`http://localhost:8080/api/analytics/report?period=${period}`, {
+            signal: AbortSignal.timeout(5000)
+        });
+        if (response.ok) {
+            data = await response.json();
+        } else {
+            console.warn('Analytics report returned status', response.status);
+        }
     } catch (e) {
-        console.error("Analytics Error:", e);
-        if (label) label.innerText = "Error loading analytics. Check Connection.";
+        console.warn('Spring Boot analytics unavailable:', e.message);
     }
+
+    // Fallback: try Tauri local analytics
+    if (!data) {
+        try {
+            const localResp = await fetch('/api/local-analytics', {
+                signal: AbortSignal.timeout(3000)
+            });
+            if (localResp.ok) {
+                const localData = await localResp.json();
+                // Map Tauri field names to match the Spring Boot format
+                data = {
+                    revenue: localData.totalRevenue || 0,
+                    cost: 0,
+                    profit: localData.totalRevenue || 0,
+                    orders: localData.totalOrders || 0,
+                    avgOrder: localData.averageOrder || 0,
+                    profitMargin: 0,
+                    paymentBreakdown: {
+                        cash: { total: localData.paymentBreakdown?.cash || 0, count: 0 },
+                        mpesa: { total: localData.paymentBreakdown?.mpesa || 0, count: 0 },
+                        bank: { total: localData.paymentBreakdown?.bank || 0, count: 0 }
+                    },
+                    chartRevenue: {},
+                    chartProfit: {},
+                    topProducts: [],
+                    recentSales: (localData.recentSales || []).map(s => ({
+                        transactionId: s.transactionId,
+                        amount: s.totalAmount,
+                        paymentMethod: s.paymentMethod,
+                        timestamp: s.timestamp,
+                        itemCount: (s.items || []).length
+                    }))
+                };
+                console.log('Using Tauri local analytics fallback');
+            }
+        } catch (e) {
+            console.warn('Tauri local analytics also unavailable:', e.message);
+        }
+    }
+
+    // Last resort: show cached state data
+    if (!data && state.analytics.data) {
+        data = state.analytics.data;
+        if (label) label.innerText = 'Showing cached data — backend offline';
+    }
+
+    if (!data) {
+        if (label) label.innerText = '⚠ Backend offline — start Spring Boot on port 8080';
+        const errEl = document.getElementById('analyticsError');
+        if (errEl) errEl.classList.remove('hidden');
+        return;
+    }
+
+    const errEl = document.getElementById('analyticsError');
+    if (errEl) errEl.classList.add('hidden');
+
+    state.analytics.data = data;
+    state.lastAnalytics = data;
+    renderAnalyticsUI(data);
+
+    const periodLabels = { daily: "Today", weekly: "This Week", monthly: "This Month", yearly: "This Year" };
+    if (label) label.innerText = data.periodLabel || periodLabels[period] || `Data for ${period}`;
 }
 
 /** Updates all the cards, lists and charts on the analytics page */
@@ -667,26 +730,95 @@ function closeNotification() {
 }
 
 async function generateSalesReport() {
-    const html = `
-        <h2 class="text-2xl font-bold mb-6">Add New Product</h2>
-        <div class="space-y-4">
-            <input id="p-code" type="text" placeholder="Barcode/Code" class="w-full bg-slate-900 p-4 rounded-xl border border-slate-700">
-            <input id="p-name" type="text" placeholder="Product Name" class="w-full bg-slate-900 p-4 rounded-xl border border-slate-700">
-            <div class="grid grid-cols-2 gap-4">
-                <input id="p-price" type="number" placeholder="Price" class="w-full bg-slate-900 p-4 rounded-xl border border-slate-700">
-                <input id="p-stock" type="number" placeholder="Stock" class="w-full bg-slate-900 p-4 rounded-xl border border-slate-700">
-            </div>
-            <select id="p-category" class="w-full bg-slate-900 p-4 rounded-xl border border-slate-700 text-slate-400">
-                <option value="Retail">Retail</option>
-                <option value="Bakery">Bakery</option>
-                <option value="Electronics">Electronics</option>
-                <option value="Groceries">Groceries</option>
-            </select>
-            <button onclick="saveProduct()" class="w-full py-4 gold-gradient rounded-xl font-bold text-lg">SAVE PRODUCT</button>
-            <button onclick="closeModal()" class="w-full text-slate-500 text-sm mt-4">Cancel</button>
+    // Use cached analytics data or fetch it
+    let reportData = state.analytics.data || state.lastAnalytics;
+    if (!reportData) {
+        try {
+            const resp = await fetch(`http://localhost:8080/api/analytics/report?period=daily`);
+            if (resp.ok) reportData = await resp.json();
+        } catch (e) { console.warn('Could not fetch analytics for report'); }
+    }
+
+    if (!reportData) {
+        showNotification('No analytics data available.\n\nEnsure Spring Boot is running and make some sales first.', '❌', 'No Data');
+        return;
+    }
+
+    const totalRevenue = (reportData.revenue || reportData.totalRevenue || 0);
+    const totalOrders = reportData.orders || reportData.totalOrders || 0;
+    const avgOrder = (reportData.avgOrder || reportData.averageOrder || 0);
+    const brk = reportData.paymentBreakdown || { cash: { total: 0 }, mpesa: { total: 0 }, bank: { total: 0 } };
+    const sales = reportData.recentSales || [];
+
+    if (sales.length === 0 && totalOrders === 0) {
+        showNotification('No transactions recorded yet.\n\nMake some sales first, then generate the report!', '📊', 'Empty Report');
+    }
+
+    const txRows = sales.map((s, i) => {
+        const items = (s.items || []).map(it => `${it.productName || it.name} x${it.quantity}`).join(', ');
+        const time = new Date(s.timestamp).toLocaleTimeString();
+        const amt = s.totalAmount || s.amount || 0;
+        const method = s.paymentMethod || 'CASH';
+        return `
+            <tr>
+                <td>${i + 1}</td>
+                <td style="font-family:monospace;font-size:11px;">${(s.transactionId || '').substring(0, 12)}...</td>
+                <td>${time}</td>
+                <td>${items || '-'}</td>
+                <td style="text-transform:uppercase">${method}</td>
+                <td style="font-weight:bold;text-align:right">KES ${amt.toLocaleString()}</td>
+            </tr>`;
+    }).join('');
+
+    const report = `<html><head><title>Safi POS - Daily Sales Report</title>
+    <style>
+        body{font-family:'Segoe UI',sans-serif;padding:40px;color:#0f172a;line-height:1.5}
+        .header{border-bottom:4px solid #f59e0b;padding-bottom:20px;margin-bottom:30px;display:flex;justify-content:space-between;align-items:center}
+        .stats{display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;margin-bottom:30px}
+        .stat-card{background:#f8fafc;padding:20px;border-radius:16px;border:1px solid #e2e8f0}
+        .stat-card h4{margin:0;color:#64748b;text-transform:uppercase;font-size:10px;letter-spacing:.1em}
+        .stat-card p{margin:8px 0 0;font-size:24px;font-weight:900;color:#0f172a}
+        .breakdown{display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;margin:20px 0}
+        .bc{background:#fefce8;padding:16px;border-radius:12px;border:1px solid #fde68a;text-align:center}
+        .bc.m{background:#ecfdf5;border-color:#a7f3d0}
+        .bc.b{background:#eff6ff;border-color:#bfdbfe}
+        .bc h5{margin:0;font-size:10px;text-transform:uppercase;color:#64748b}
+        .bc p{margin:6px 0 0;font-size:18px;font-weight:800}
+        table{width:100%;border-collapse:collapse;margin-top:20px}
+        th{text-align:left;background:#f1f5f9;padding:12px;font-size:11px;color:#475569;text-transform:uppercase}
+        td{padding:12px;border-bottom:1px solid #e2e8f0;font-size:12px}
+        tr:hover{background:#fefce8}
+        .footer{margin-top:40px;font-size:10px;color:#94a3b8;text-align:center;border-top:1px solid #e2e8f0;padding-top:16px}
+        @media print{.no-print{display:none}}
+    </style></head><body>
+    <div class="header">
+        <div>
+            <h1 style="margin:0;font-size:28px;font-weight:900">DAILY SALES REPORT</h1>
+            <p style="margin:5px 0 0;color:#64748b;font-size:13px">SAFI MODERN RETAIL — ${new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</p>
+            <p style="margin:2px 0 0;color:#94a3b8;font-size:11px">Generated: ${new Date().toLocaleString()} | Cashier: ${state.user?.name || 'N/A'}</p>
         </div>
-    `;
-    openModal(html);
+        <button onclick="window.print()" class="no-print" style="padding:10px 24px;background:#f59e0b;color:white;border:none;border-radius:10px;cursor:pointer;font-weight:bold">🖨️ PRINT</button>
+    </div>
+    <div class="stats">
+        <div class="stat-card"><h4>Total Revenue</h4><p>KES ${totalRevenue.toLocaleString()}</p></div>
+        <div class="stat-card"><h4>Total Orders</h4><p>${totalOrders}</p></div>
+        <div class="stat-card"><h4>Avg Order Value</h4><p>KES ${Number(avgOrder).toLocaleString()}</p></div>
+    </div>
+    <p style="font-weight:900;font-size:14px;text-transform:uppercase;color:#334155">Payment Method Breakdown</p>
+    <div class="breakdown">
+        <div class="bc"><h5>💵 Cash</h5><p>KES ${(brk.cash?.total || brk.cash || 0).toLocaleString()}</p></div>
+        <div class="bc m"><h5>📱 M-Pesa</h5><p>KES ${(brk.mpesa?.total || brk.mpesa || 0).toLocaleString()}</p></div>
+        <div class="bc b"><h5>🏦 Bank</h5><p>KES ${(brk.bank?.total || brk.bank || 0).toLocaleString()}</p></div>
+    </div>
+    <p style="font-weight:900;font-size:14px;text-transform:uppercase;color:#334155;margin-top:20px">Transaction Log</p>
+    <table><thead><tr><th>#</th><th>Txn ID</th><th>Time</th><th>Items</th><th>Method</th><th>Amount</th></tr></thead>
+    <tbody>${txRows || '<tr><td colspan="6" style="text-align:center;color:#94a3b8;padding:24px">No transactions yet</td></tr>'}</tbody></table>
+    <div class="footer">Safi POS · Generated ${new Date().toLocaleString()} · Confidential</div>
+    </body></html>`;
+
+    const win = window.open('', '_blank');
+    if (win) { win.document.write(report); win.document.close(); }
+    else showNotification('Pop-up blocked. Please allow pop-ups to print the report.', '⚠️', 'Pop-up Blocked');
 }
 
 function openAddProductModal() {
@@ -1296,41 +1428,68 @@ async function triggerPayment(method) {
     if (state.cart.length === 0) return showNotification('Please add items to cart first', '🛒', 'Cart Empty');
 
     const phoneEl = document.getElementById('pay-phone');
-    const sale = {
+    const total = state.cart.reduce((s, i) => s + (i.price * i.quantity), 0);
+
+    // ── 1. Save to Spring Boot (primary — analytics source) ──────────────────
+    const springPayload = {
+        items: state.cart.map(i => ({ product: { id: i.id }, quantity: i.quantity })),
+        paymentMethod: method,
+        customerPhone: phoneEl ? phoneEl.value.trim() : null,
+        cashierName: state.user ? state.user.name : 'Cashier',
+        status: 'SUCCESS'
+    };
+
+    let springOk = false;
+    try {
+        const springResp = await fetch('http://localhost:8080/api/sales/checkout', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(springPayload)
+        });
+        if (springResp.ok) {
+            springOk = true;
+            console.log('Sale saved to Spring Boot hub ✓');
+        } else {
+            const err = await springResp.text();
+            console.warn('Spring Boot sale failed:', err);
+        }
+    } catch (e) {
+        console.warn('Spring Boot not reachable, using local only:', e.message);
+    }
+
+    // ── 2. Save to Tauri local store (fallback analytics + receipt) ──────────
+    const tauriPayload = {
         items: state.cart.map(i => ({ product_id: i.id, quantity: i.quantity })),
         payment_method: method,
         customer_phone: phoneEl ? phoneEl.value.trim() : null,
-        cashier_name: state.user ? state.user.name : "Anonymous"
+        cashier_name: state.user ? state.user.name : 'Cashier'
     };
 
     try {
-        const response = await fetch('/api/checkout', {
+        const tauriResp = await fetch('/api/checkout', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(sale)
+            body: JSON.stringify(tauriPayload)
         });
 
-        if (!response.ok) throw new Error("Payment failed at terminal");
+        if (!tauriResp.ok && !springOk) throw new Error('Payment failed at terminal and hub');
 
-        const result = await response.json();
+        const result = tauriResp.ok ? await tauriResp.json() : {};
 
-        // Show success notification
-        const paymentName = method === 'CASH' ? 'Cash' : method === 'MPESA_STK' ? 'M-Pesa' : method;
+        const paymentName = method === 'CASH' ? '💵 Cash' : method.includes('MPESA') || method.includes('PESA') ? '📱 M-Pesa' : `🏦 ${method}`;
         showNotification(
-            `Payment successful!\n\nPayment Method: ${paymentName}\nAmount: KES ${state.cart.reduce((s, i) => s + (i.price * i.quantity), 0).toLocaleString()}\n\nAnalytics updated.`,
-            '✅',
-            'Payment Complete'
+            `Payment successful!\n\n${paymentName}\nAmount: KES ${total.toLocaleString()}\n\nAnalytics updated.`,
+            '✅', 'Payment Complete'
         );
 
-        showReceipt(result.qr_code);
+        if (result.qr_code) showReceipt(result.qr_code);
         state.cart = [];
         renderCart();
+        closeModal();
 
-        // Refresh products to show updated stock levels
         await syncProductsFromHub();
+        setTimeout(() => loadAnalytics(), 500);
 
-        // Refresh analytics immediately
-        setTimeout(() => loadAnalytics(), 300);
     } catch (e) {
         showNotification('Transaction Failed: ' + e.message, '❌', 'Payment Error');
     }

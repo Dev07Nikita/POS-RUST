@@ -151,6 +151,7 @@ public class AnalyticsController {
     private LocalDateTime getPeriodStart(String period) {
         LocalDateTime now = LocalDateTime.now();
         return switch (period.toLowerCase()) {
+            case "weekly" -> now.minusDays(6).withHour(0).withMinute(0).withSecond(0).withNano(0);
             case "monthly" -> now.withDayOfMonth(1).withHour(0).withMinute(0).withSecond(0).withNano(0);
             case "yearly" -> now.withDayOfYear(1).withHour(0).withMinute(0).withSecond(0).withNano(0);
             default -> now.withHour(0).withMinute(0).withSecond(0).withNano(0); // daily
@@ -159,20 +160,25 @@ public class AnalyticsController {
 
     private String getPeriodLabel(String period) {
         return switch (period.toLowerCase()) {
+            case "weekly" -> "This Week";
             case "monthly" -> "This Month";
             case "yearly" -> "This Year";
             default -> "Today";
         };
     }
 
-    /** Group sales revenue by hour (daily), day (monthly), or month (yearly) */
+    /**
+     * Group sales revenue by hour (daily), day-of-week (weekly), day (monthly), or
+     * month (yearly)
+     */
     private Map<String, Double> buildChartData(List<Sale> sales, String period) {
         Map<String, Double> data = new LinkedHashMap<>();
         for (Sale s : sales) {
             if (s.getTimestamp() == null)
                 continue;
             String key = switch (period.toLowerCase()) {
-                case "monthly" -> String.valueOf(s.getTimestamp().getDayOfMonth()); // day 1-31
+                case "weekly" -> s.getTimestamp().getDayOfWeek().toString().substring(0, 3); // MON..SUN
+                case "monthly" -> String.valueOf(s.getTimestamp().getDayOfMonth()); // 1-31
                 case "yearly" -> s.getTimestamp().getMonth().toString().substring(0, 3); // JAN..DEC
                 default -> String.format("%02d:00", s.getTimestamp().getHour()); // 00:00-23:00
             };
@@ -188,6 +194,7 @@ public class AnalyticsController {
             if (s.getTimestamp() == null)
                 continue;
             String key = switch (period.toLowerCase()) {
+                case "weekly" -> s.getTimestamp().getDayOfWeek().toString().substring(0, 3);
                 case "monthly" -> String.valueOf(s.getTimestamp().getDayOfMonth());
                 case "yearly" -> s.getTimestamp().getMonth().toString().substring(0, 3);
                 default -> String.format("%02d:00", s.getTimestamp().getHour());

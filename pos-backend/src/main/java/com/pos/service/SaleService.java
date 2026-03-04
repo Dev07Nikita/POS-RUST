@@ -42,7 +42,8 @@ public class SaleService {
                     .orElseThrow(() -> new RuntimeException("Product not found: " + item.getProduct().getId()));
 
             if (product.getStockQuantity() < item.getQuantity()) {
-                throw new RuntimeException("Insufficient stock for: " + product.getName() + ". Available: " + product.getStockQuantity());
+                throw new RuntimeException(
+                        "Insufficient stock for: " + product.getName() + ". Available: " + product.getStockQuantity());
             }
 
             product.setStockQuantity(product.getStockQuantity() - item.getQuantity());
@@ -59,14 +60,17 @@ public class SaleService {
 
         Sale savedSale = saleRepository.save(sale);
 
-        // Cash sales are complete immediately; analytics will pick them up
-        if ("CASH".equalsIgnoreCase(sale.getPaymentMethod())) {
+        // Immediate payments (non-M-Pesa) are settled right away — mark SUCCESS
+        // M-Pesa STK stays PENDING until callback confirms
+        String pm = sale.getPaymentMethod() != null ? sale.getPaymentMethod().toUpperCase() : "";
+        boolean isImmediatePayment = !pm.contains("PESA") && !pm.contains("STK");
+        if (isImmediatePayment) {
             savedSale.setStatus("SUCCESS");
             saleRepository.save(savedSale);
             auditLogRepository.save(AuditLog.builder()
                     .username("POS")
                     .action("SALE")
-                    .details("CASH sale " + savedSale.getTransactionId() + " KES " + savedSale.getTotalAmount())
+                    .details(pm + " sale " + savedSale.getTransactionId() + " KES " + savedSale.getTotalAmount())
                     .ipAddress(null)
                     .build());
         }
@@ -91,7 +95,8 @@ public class SaleService {
                     .orElseThrow(() -> new RuntimeException("Product not found: " + dto.getProductId()));
 
             if (product.getStockQuantity() < dto.getQuantity()) {
-                throw new RuntimeException("Insufficient stock for: " + product.getName() + ". Available: " + product.getStockQuantity());
+                throw new RuntimeException(
+                        "Insufficient stock for: " + product.getName() + ". Available: " + product.getStockQuantity());
             }
 
             double unitPrice = product.getPrice();
@@ -123,11 +128,15 @@ public class SaleService {
     }
 
     private static String normalizePhone(String phone) {
-        if (phone == null) return null;
+        if (phone == null)
+            return null;
         String digits = phone.replaceAll("\\D", "");
-        if (digits.startsWith("254")) return digits;
-        if (digits.startsWith("0")) return "254" + digits.substring(1);
-        if (digits.length() == 9) return "254" + digits;
+        if (digits.startsWith("254"))
+            return digits;
+        if (digits.startsWith("0"))
+            return "254" + digits.substring(1);
+        if (digits.length() == 9)
+            return "254" + digits;
         return digits;
     }
 }
