@@ -1,9 +1,7 @@
 package com.pos.config;
 
-import com.pos.model.Branch;
 import com.pos.model.Product;
 import com.pos.model.Role;
-import com.pos.repository.BranchRepository;
 import com.pos.repository.ProductRepository;
 import com.pos.repository.RoleRepository;
 import com.pos.repository.UserRepository;
@@ -23,7 +21,6 @@ public class DataInitializer implements CommandLineRunner {
         private final RoleRepository roleRepository;
         private final UserRepository userRepository;
         private final ProductRepository productRepository;
-        private final BranchRepository branchRepository;
 
         @Override
         @Transactional

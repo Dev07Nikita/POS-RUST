@@ -379,7 +379,7 @@ public class MpesaService {
      * Note: Safaricom has a known typo — "CoversationID" instead of
      * "ConversationID".
      */
-    @SuppressWarnings("unchecked")
+
     public String registerUrls() {
         try {
             String token = getAccessToken();
