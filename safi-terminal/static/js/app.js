@@ -339,7 +339,7 @@ async function syncProductsFromHub() {
 }
 
 function switchView(view) {
-    const views = ['viewCheckout', 'viewInventory', 'viewAnalytics', 'viewSupport', 'viewLogistics', 'viewAdmin'];
+    const views = ['viewCheckout', 'viewInventory', 'viewAnalytics', 'viewSupport', 'viewLogistics', 'viewAdmin', 'viewBranches'];
     views.forEach(id => {
         const el = document.getElementById(id);
         if (el) el.classList.add('hidden');
@@ -366,6 +366,9 @@ function switchView(view) {
     } else if (view === 'admin') {
         const adminView = document.getElementById('viewAdmin');
         if (adminView) { adminView.classList.remove('hidden'); loadAdminHub(); }
+    } else if (view === 'branches') {
+        const brView = document.getElementById('viewBranches');
+        if (brView) { brView.classList.remove('hidden'); loadBranches(); }
     }
 }
 
@@ -508,29 +511,41 @@ async function loadAnalyticsReport() {
 
     let data = null;
 
-    // Try Spring Boot first (primary analytics source)
+    // Helper: fetch with manual timeout (AbortSignal.timeout not supported in all WebView2)
+    async function fetchWithTimeout(url, ms) {
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), ms);
+        try {
+            const r = await fetch(url, { signal: controller.signal });
+            clearTimeout(timer);
+            return r;
+        } catch (e) {
+            clearTimeout(timer);
+            throw e;
+        }
+    }
+
+    // 1. Try Spring Boot (primary analytics source)
     try {
-        const response = await fetch(`http://localhost:8080/api/analytics/report?period=${period}`, {
-            signal: AbortSignal.timeout(5000)
-        });
+        const response = await fetchWithTimeout(
+            `http://localhost:8080/api/analytics/report?period=${period}`, 6000
+        );
         if (response.ok) {
             data = await response.json();
+            console.log('Analytics loaded from Spring Boot');
         } else {
-            console.warn('Analytics report returned status', response.status);
+            console.warn('Analytics HTTP', response.status);
         }
     } catch (e) {
         console.warn('Spring Boot analytics unavailable:', e.message);
     }
 
-    // Fallback: try Tauri local analytics
+    // 2. Fallback: Tauri local analytics
     if (!data) {
         try {
-            const localResp = await fetch('/api/local-analytics', {
-                signal: AbortSignal.timeout(3000)
-            });
+            const localResp = await fetchWithTimeout('/api/local-analytics', 3000);
             if (localResp.ok) {
                 const localData = await localResp.json();
-                // Map Tauri field names to match the Spring Boot format
                 data = {
                     revenue: localData.totalRevenue || 0,
                     cost: 0,
@@ -554,21 +569,21 @@ async function loadAnalyticsReport() {
                         itemCount: (s.items || []).length
                     }))
                 };
-                console.log('Using Tauri local analytics fallback');
+                console.log('Analytics: Tauri local fallback used');
             }
         } catch (e) {
-            console.warn('Tauri local analytics also unavailable:', e.message);
+            console.warn('Tauri local analytics unavailable:', e.message);
         }
     }
 
-    // Last resort: show cached state data
+    // 3. Last resort: show stale cached data
     if (!data && state.analytics.data) {
         data = state.analytics.data;
         if (label) label.innerText = 'Showing cached data — backend offline';
     }
 
     if (!data) {
-        if (label) label.innerText = '⚠ Backend offline — start Spring Boot on port 8080';
+        if (label) label.innerText = '⚠ Start Spring Boot: cd pos-backend && ./gradlew bootRun';
         const errEl = document.getElementById('analyticsError');
         if (errEl) errEl.classList.remove('hidden');
         return;
@@ -581,8 +596,8 @@ async function loadAnalyticsReport() {
     state.lastAnalytics = data;
     renderAnalyticsUI(data);
 
-    const periodLabels = { daily: "Today", weekly: "This Week", monthly: "This Month", yearly: "This Year" };
-    if (label) label.innerText = data.periodLabel || periodLabels[period] || `Data for ${period}`;
+    const labels = { daily: 'Today', weekly: 'This Week', monthly: 'This Month', yearly: 'This Year' };
+    if (label) label.innerText = data.periodLabel || labels[period] || `Data for ${period}`;
 }
 
 /** Updates all the cards, lists and charts on the analytics page */
@@ -1065,36 +1080,271 @@ async function loadAdminHub() {
 
 function applyPermissions(role) {
     const permissions = {
-        'ADMIN': ['menuInventory', 'menuReports', 'menuLogistics', 'menuAdmin', 'menuSupport'],
-        'MANAGER': ['menuInventory', 'menuReports', 'menuSupport'],
+        'ADMIN': ['menuInventory', 'menuReports', 'menuLogistics', 'menuAdmin', 'menuBranches', 'menuSupport'],
+        'MANAGER': ['menuInventory', 'menuReports', 'menuBranches', 'menuSupport'],
         'LOGISTICS': ['menuLogistics', 'menuSupport'],
         'CASHIER': ['menuSupport'],
         'SALES': ['menuReports', 'menuSupport'],
         'USER': ['menuSupport']
     };
 
-    // Hide all privileged menus first
-    ['menuInventory', 'menuReports', 'menuLogistics', 'menuAdmin', 'menuSupport'].forEach(id => {
+    // Hide ALL privileged menus first
+    ['menuInventory', 'menuReports', 'menuLogistics', 'menuAdmin', 'menuBranches', 'menuSupport'].forEach(id => {
         const el = document.getElementById(id);
         if (el) el.classList.add('hidden');
     });
 
-    // Show allowed menus
+    // Show allowed menus for this role
     (permissions[role] || []).forEach(id => {
         const el = document.getElementById(id);
         if (el) el.classList.remove('hidden');
     });
 
-    // Wire up Logistics menu click
+    // Wire up dynamic-onclick menus
     const logisticsBtn = document.getElementById('menuLogistics');
-    if (logisticsBtn) {
-        logisticsBtn.onclick = () => switchView('logistics');
-    }
+    if (logisticsBtn) logisticsBtn.onclick = () => switchView('logistics');
 
-    // Wire up Admin menu click
     const adminBtn = document.getElementById('menuAdmin');
-    if (adminBtn) {
-        adminBtn.onclick = () => switchView('admin');
+    if (adminBtn) adminBtn.onclick = () => switchView('admin');
+
+    const branchesBtn = document.getElementById('menuBranches');
+    if (branchesBtn) branchesBtn.onclick = () => switchView('branches');
+}
+
+// ============================================================
+// BRANCHES — Multi-Branch Management
+// ============================================================
+
+async function loadBranches() {
+    const content = document.getElementById('branches-content');
+    if (!content) return;
+    content.innerHTML = '<p class="text-center text-slate-500 py-12">Loading branches...</p>';
+    try {
+        const [branchResp, summaryResp] = await Promise.all([
+            fetch('http://localhost:8080/api/branches'),
+            fetch('http://localhost:8080/api/branches/summary')
+        ]);
+        const branches = branchResp.ok ? await branchResp.json() : [];
+        const summary = summaryResp.ok ? await summaryResp.json() : {};
+
+        content.innerHTML = `
+            <!-- Summary Stats -->
+            <div class="grid grid-cols-4 gap-4 mb-7">
+                <div class="bg-slate-800 p-5 rounded-2xl border border-slate-700">
+                    <p class="text-slate-400 text-xs font-bold uppercase mb-1">Total Branches</p>
+                    <p class="text-3xl font-black text-white">${summary.total || branches.length}</p>
+                </div>
+                <div class="bg-green-900/30 p-5 rounded-2xl border border-green-500/30">
+                    <p class="text-green-400 text-xs font-bold uppercase mb-1">Active</p>
+                    <p class="text-3xl font-black text-green-400">${summary.active || 0}</p>
+                </div>
+                <div class="bg-red-900/30 p-5 rounded-2xl border border-red-500/30">
+                    <p class="text-red-400 text-xs font-bold uppercase mb-1">Inactive</p>
+                    <p class="text-3xl font-black text-red-400">${summary.inactive || 0}</p>
+                </div>
+                <div class="bg-blue-900/30 p-5 rounded-2xl border border-blue-500/30">
+                    <p class="text-blue-400 text-xs font-bold uppercase mb-1">Total Staff</p>
+                    <p class="text-3xl font-black text-blue-400">${summary.totalStaff || 0}</p>
+                </div>
+            </div>
+
+            <!-- Branch Cards -->
+            <div class="grid grid-cols-2 gap-4">
+                ${branches.length === 0
+                ? '<div class="col-span-2 text-center py-12 text-slate-500"><p class="text-4xl mb-3">🏪</p><p class="font-bold">No branches found</p><p class="text-sm mt-1">Add your first branch using the button above</p></div>'
+                : branches.map(b => `
+                    <div class="bg-slate-800 rounded-2xl border ${b.active ? 'border-slate-700' : 'border-red-900/50 opacity-70'
+                    } p-5 flex flex-col gap-3 hover:border-amber-500/40 transition-all">
+                        <!-- Branch Header -->
+                        <div class="flex justify-between items-start">
+                            <div>
+                                <div class="flex items-center gap-2 mb-1">
+                                    <span class="w-2 h-2 rounded-full ${b.active ? 'bg-green-500 animate-pulse' : 'bg-red-500'
+                    }"></span>
+                                    <p class="text-[10px] font-black uppercase tracking-wider ${b.active ? 'text-green-500' : 'text-red-400'
+                    }">${b.active ? 'ACTIVE' : 'INACTIVE'}</p>
+                                </div>
+                                <h3 class="font-black text-base text-white">${b.name}</h3>
+                                <p class="text-[11px] text-amber-500 font-bold">${b.code || ''}</p>
+                            </div>
+                            <div class="flex gap-2">
+                                <button onclick="openEditBranchModal(${b.id})" 
+                                    class="p-2 glass rounded-lg text-slate-400 hover:text-amber-500 text-sm" title="Edit">✏️</button>
+                                <button onclick="toggleBranch(${b.id})" 
+                                    class="p-2 glass rounded-lg text-slate-400 hover:text-green-400 text-sm" title="Toggle Active">
+                                    ${b.active ? '🔴' : '🟢'}
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Branch Details -->
+                        <div class="space-y-1.5 text-[12px] text-slate-400">
+                            <div class="flex items-center gap-2">
+                                <span class="text-base">📍</span>
+                                <span>${b.location || 'No address set'}, ${b.city || ''}</span>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <span class="text-base">👤</span>
+                                <span>${b.managerName || 'No manager assigned'}</span>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <span class="text-base">📞</span>
+                                <span>${b.managerPhone || 'No phone'}</span>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <span class="text-base">✉️</span>
+                                <span class="text-amber-500/80">${b.email || 'No email'}</span>
+                            </div>
+                        </div>
+
+                        <!-- Staff Badge -->
+                        <div class="flex justify-between items-center pt-2 border-t border-slate-700">
+                            <span class="text-[11px] text-slate-500">Staff Count</span>
+                            <span class="px-3 py-1 bg-amber-500/10 text-amber-500 rounded-full text-[11px] font-black">${b.staffCount || 0} staff</span>
+                        </div>
+                    </div>`).join('')
+            }
+            </div>
+        `;
+    } catch (e) {
+        content.innerHTML = `
+            <div class="text-center py-16">
+                <p class="text-5xl mb-4">🏪</p>
+                <p class="font-bold text-slate-400">Could not load branches</p>
+                <p class="text-slate-500 text-sm mt-2">Ensure Spring Boot is running on port 8080</p>
+                <button onclick="loadBranches()" class="mt-4 px-6 py-2 glass rounded-xl text-sm font-bold border border-slate-600">Retry</button>
+            </div>`;
+    }
+}
+
+function openAddBranchModal() {
+    const html = `
+        <h2 class="text-2xl font-bold mb-6">🏪 Add New Branch</h2>
+        <div class="space-y-4 text-left">
+            <div class="grid grid-cols-2 gap-4">
+                <div>
+                    <label class="text-xs text-slate-400 font-bold uppercase mb-1 block">Branch Name</label>
+                    <input id="br-name" type="text" placeholder="e.g. Westlands Branch" class="w-full bg-slate-700 p-3 rounded-xl border border-slate-600 text-white outline-none focus:border-amber-500">
+                </div>
+                <div>
+                    <label class="text-xs text-slate-400 font-bold uppercase mb-1 block">Branch Code</label>
+                    <input id="br-code" type="text" placeholder="e.g. WL-001" class="w-full bg-slate-700 p-3 rounded-xl border border-slate-600 text-white outline-none focus:border-amber-500">
+                </div>
+            </div>
+            <div>
+                <label class="text-xs text-slate-400 font-bold uppercase mb-1 block">Location / Address</label>
+                <input id="br-location" type="text" placeholder="Building, Street" class="w-full bg-slate-700 p-3 rounded-xl border border-slate-600 text-white outline-none focus:border-amber-500">
+            </div>
+            <div>
+                <label class="text-xs text-slate-400 font-bold uppercase mb-1 block">City</label>
+                <input id="br-city" type="text" placeholder="Nairobi" class="w-full bg-slate-700 p-3 rounded-xl border border-slate-600 text-white outline-none focus:border-amber-500">
+            </div>
+            <div class="grid grid-cols-2 gap-4">
+                <div>
+                    <label class="text-xs text-slate-400 font-bold uppercase mb-1 block">Manager Name</label>
+                    <input id="br-manager" type="text" placeholder="Full Name" class="w-full bg-slate-700 p-3 rounded-xl border border-slate-600 text-white outline-none focus:border-amber-500">
+                </div>
+                <div>
+                    <label class="text-xs text-slate-400 font-bold uppercase mb-1 block">Manager Phone</label>
+                    <input id="br-phone" type="tel" placeholder="07XXXXXXXX" class="w-full bg-slate-700 p-3 rounded-xl border border-slate-600 text-white outline-none focus:border-amber-500">
+                </div>
+            </div>
+            <div class="grid grid-cols-2 gap-4">
+                <div>
+                    <label class="text-xs text-slate-400 font-bold uppercase mb-1 block">Email</label>
+                    <input id="br-email" type="email" placeholder="branch@company.co.ke" class="w-full bg-slate-700 p-3 rounded-xl border border-slate-600 text-white outline-none focus:border-amber-500">
+                </div>
+                <div>
+                    <label class="text-xs text-slate-400 font-bold uppercase mb-1 block">Staff Count</label>
+                    <input id="br-staff" type="number" placeholder="0" class="w-full bg-slate-700 p-3 rounded-xl border border-slate-600 text-white outline-none focus:border-amber-500">
+                </div>
+            </div>
+            <button onclick="saveBranch()" class="w-full py-4 gold-gradient rounded-xl font-bold text-lg mt-2">ADD BRANCH</button>
+            <button onclick="closeEditModal()" class="w-full text-slate-500 text-sm">Cancel</button>
+        </div>`;
+    openEditModal(html);
+}
+
+function openEditBranchModal(id) {
+    fetch(`http://localhost:8080/api/branches/${id}`)
+        .then(r => r.json())
+        .then(b => {
+            const html = `
+                <h2 class="text-2xl font-bold mb-6">✏️ Edit Branch</h2>
+                <input type="hidden" id="br-edit-id" value="${b.id}">
+                <div class="space-y-4 text-left">
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="text-xs text-slate-400 font-bold uppercase mb-1 block">Branch Name</label>
+                            <input id="br-name" type="text" value="${b.name || ''}" class="w-full bg-slate-700 p-3 rounded-xl border border-slate-600 text-white outline-none focus:border-amber-500">
+                        </div>
+                        <div>
+                            <label class="text-xs text-slate-400 font-bold uppercase mb-1 block">Branch Code</label>
+                            <input id="br-code" type="text" value="${b.code || ''}" class="w-full bg-slate-700 p-3 rounded-xl border border-slate-600 text-white outline-none focus:border-amber-500">
+                        </div>
+                    </div>
+                    <div><label class="text-xs text-slate-400 font-bold uppercase mb-1 block">Location</label>
+                        <input id="br-location" type="text" value="${b.location || ''}" class="w-full bg-slate-700 p-3 rounded-xl border border-slate-600 text-white outline-none focus:border-amber-500"></div>
+                    <div><label class="text-xs text-slate-400 font-bold uppercase mb-1 block">City</label>
+                        <input id="br-city" type="text" value="${b.city || ''}" class="w-full bg-slate-700 p-3 rounded-xl border border-slate-600 text-white outline-none focus:border-amber-500"></div>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div><label class="text-xs text-slate-400 font-bold uppercase mb-1 block">Manager</label>
+                            <input id="br-manager" type="text" value="${b.managerName || ''}" class="w-full bg-slate-700 p-3 rounded-xl border border-slate-600 text-white outline-none focus:border-amber-500"></div>
+                        <div><label class="text-xs text-slate-400 font-bold uppercase mb-1 block">Phone</label>
+                            <input id="br-phone" type="tel" value="${b.managerPhone || ''}" class="w-full bg-slate-700 p-3 rounded-xl border border-slate-600 text-white outline-none focus:border-amber-500"></div>
+                    </div>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div><label class="text-xs text-slate-400 font-bold uppercase mb-1 block">Email</label>
+                            <input id="br-email" type="email" value="${b.email || ''}" class="w-full bg-slate-700 p-3 rounded-xl border border-slate-600 text-white outline-none focus:border-amber-500"></div>
+                        <div><label class="text-xs text-slate-400 font-bold uppercase mb-1 block">Staff Count</label>
+                            <input id="br-staff" type="number" value="${b.staffCount || 0}" class="w-full bg-slate-700 p-3 rounded-xl border border-slate-600 text-white outline-none focus:border-amber-500"></div>
+                    </div>
+                    <button onclick="saveBranch(${b.id})" class="w-full py-4 gold-gradient rounded-xl font-bold text-lg mt-2">UPDATE BRANCH</button>
+                    <button onclick="closeEditModal()" class="w-full text-slate-500 text-sm">Cancel</button>
+                </div>`;
+            openEditModal(html);
+        })
+        .catch(() => showNotification('Could not load branch details', '❌', 'Error'));
+}
+
+async function saveBranch(id = null) {
+    const branch = {
+        name: (document.getElementById('br-name')?.value || '').trim(),
+        code: (document.getElementById('br-code')?.value || '').trim(),
+        location: (document.getElementById('br-location')?.value || '').trim(),
+        city: (document.getElementById('br-city')?.value || '').trim(),
+        managerName: (document.getElementById('br-manager')?.value || '').trim(),
+        managerPhone: (document.getElementById('br-phone')?.value || '').trim(),
+        email: (document.getElementById('br-email')?.value || '').trim(),
+        staffCount: parseInt(document.getElementById('br-staff')?.value) || 0,
+        active: true
+    };
+
+    if (!branch.name) return showNotification('Branch name is required', '⚠️', 'Validation');
+
+    const url = id ? `http://localhost:8080/api/branches/${id}` : 'http://localhost:8080/api/branches';
+    const method = id ? 'PUT' : 'POST';
+    try {
+        const resp = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(branch) });
+        if (resp.ok) {
+            closeEditModal();
+            showNotification(`Branch "${branch.name}" ${id ? 'updated' : 'added'} successfully!`, '✅', 'Saved');
+            loadBranches();
+        } else {
+            showNotification('Failed to save branch. Check the backend.', '❌', 'Error');
+        }
+    } catch (e) {
+        showNotification('Cannot connect to Spring Boot on port 8080', '❌', 'Connection Error');
+    }
+}
+
+async function toggleBranch(id) {
+    try {
+        const resp = await fetch(`http://localhost:8080/api/branches/${id}/toggle`, { method: 'PATCH' });
+        if (resp.ok) { loadBranches(); }
+        else showNotification('Could not toggle branch status', '❌', 'Error');
+    } catch (e) {
+        showNotification('Backend not reachable', '❌', 'Error');
     }
 }
 
