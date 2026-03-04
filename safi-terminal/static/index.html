@@ -549,6 +549,32 @@
             </div>
         </section>
 
+        <!-- Branches / Multi-Branch View -->
+        <section id="viewBranches" class="glass rounded-3xl p-6 flex flex-col hidden"
+            style="max-height: calc(100vh - 120px)">
+            <div class="flex flex-col mb-6">
+                <div class="flex justify-between items-center">
+                    <div>
+                        <h2 class="text-3xl font-black tracking-tight">Enterprise Branches</h2>
+                        <p class="text-xs font-bold text-slate-400 mt-1 uppercase tracking-widest">Multi-Location
+                            Management</p>
+                    </div>
+                    <div class="flex gap-3">
+                        <button onclick="openAddBranchModal()"
+                            class="px-5 py-2.5 gold-gradient rounded-xl font-black text-sm text-slate-900 shadow-[0_0_15px_rgba(245,158,11,0.2)] hover:scale-105 transition-all flex items-center gap-2">
+                            <span class="material-icons text-base">add_business</span>
+                            NEW BRANCH
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Content Container -->
+            <div id="branches-content" class="flex-grow overflow-y-auto scrollbar-custom pr-2">
+                <!-- Branch data injected here by JS loadBranches() -->
+            </div>
+        </section>
+
         <!-- Cart Area with Scrollable Payment Options -->
         <aside class="glass rounded-3xl p-6 flex flex-col h-full relative overflow-hidden">
             <!-- Cart Header -->
