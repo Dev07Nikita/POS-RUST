@@ -2,7 +2,6 @@ package com.pos.controller;
 
 import com.pos.model.Sale;
 import com.pos.model.SaleItem;
-import com.pos.model.Product;
 import com.pos.repository.ProductRepository;
 import com.pos.repository.SaleRepository;
 import com.pos.service.SaleService;

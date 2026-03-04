@@ -2,7 +2,6 @@ package com.pos.controller;
 
 import com.pos.model.Sale;
 import com.pos.model.SaleItem;
-import com.pos.model.Product;
 import com.pos.repository.SaleRepository;
 import com.pos.repository.ProductRepository;
 import lombok.RequiredArgsConstructor;
@@ -11,7 +10,6 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDateTime;
-import java.time.YearMonth;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -27,7 +25,8 @@ public class AnalyticsController {
 
     /**
      * Main analytics endpoint — supports period: daily | monthly | yearly
-     * Returns: revenue, cost, profit, orders, payment breakdown, chart data, top products
+     * Returns: revenue, cost, profit, orders, payment breakdown, chart data, top
+     * products
      */
     @GetMapping("/report")
     public ResponseEntity<?> getReport(@RequestParam(defaultValue = "daily") String period) {
@@ -35,9 +34,9 @@ public class AnalyticsController {
         List<Sale> sales = saleRepository.findByStatusAndTimestampAfterOrderByTimestampDesc("SUCCESS", start);
 
         double revenue = 0, cost = 0;
-        int     orders = sales.size();
+        int orders = sales.size();
         double cash = 0, mpesa = 0, bank = 0;
-        int    cashCount = 0, mpesaCount = 0, bankCount = 0;
+        int cashCount = 0, mpesaCount = 0, bankCount = 0;
 
         // Top products map: productName -> {qty, revenue}
         Map<String, double[]> productStats = new LinkedHashMap<>();
@@ -53,7 +52,7 @@ public class AnalyticsController {
 
                     // Top products
                     String name = item.getProductName() != null ? item.getProductName() : "Unknown";
-                    productStats.computeIfAbsent(name, k -> new double[]{0, 0});
+                    productStats.computeIfAbsent(name, k -> new double[] { 0, 0 });
                     productStats.get(name)[0] += item.getQuantity();
                     productStats.get(name)[1] += item.getSubtotal() != null ? item.getSubtotal() : 0;
                 }
@@ -62,11 +61,14 @@ public class AnalyticsController {
             // Payment breakdown
             String method = s.getPaymentMethod() != null ? s.getPaymentMethod().toUpperCase() : "";
             if (method.contains("CASH")) {
-                cash += s.getTotalAmount(); cashCount++;
+                cash += s.getTotalAmount();
+                cashCount++;
             } else if (method.contains("PESA") || method.contains("STK")) {
-                mpesa += s.getTotalAmount(); mpesaCount++;
+                mpesa += s.getTotalAmount();
+                mpesaCount++;
             } else {
-                bank += s.getTotalAmount(); bankCount++;
+                bank += s.getTotalAmount();
+                bankCount++;
             }
         }
 
@@ -74,7 +76,7 @@ public class AnalyticsController {
 
         // Chart data — group by sub-period
         Map<String, Double> chartRevenue = buildChartData(sales, period);
-        Map<String, Double> chartProfit  = buildProfitChartData(sales, period);
+        Map<String, Double> chartProfit = buildProfitChartData(sales, period);
 
         // Top 5 products by revenue
         List<Map<String, Object>> topProducts = productStats.entrySet().stream()
@@ -102,27 +104,26 @@ public class AnalyticsController {
 
         Map<String, Object> resp = new LinkedHashMap<>();
         // KPI Cards
-        resp.put("revenue",   Math.round(revenue * 100.0) / 100.0);
-        resp.put("cost",      Math.round(cost    * 100.0) / 100.0);
-        resp.put("profit",    Math.round(profit  * 100.0) / 100.0);
-        resp.put("orders",    orders);
-        resp.put("avgOrder",  orders > 0 ? Math.round((revenue / orders) * 100.0) / 100.0 : 0);
+        resp.put("revenue", Math.round(revenue * 100.0) / 100.0);
+        resp.put("cost", Math.round(cost * 100.0) / 100.0);
+        resp.put("profit", Math.round(profit * 100.0) / 100.0);
+        resp.put("orders", orders);
+        resp.put("avgOrder", orders > 0 ? Math.round((revenue / orders) * 100.0) / 100.0 : 0);
         resp.put("profitMargin", revenue > 0 ? Math.round((profit / revenue) * 1000.0) / 10.0 : 0);
 
         // Payment breakdown
         resp.put("paymentBreakdown", Map.of(
-                "cash",  Map.of("total", Math.round(cash  * 100.0)/100.0, "count", cashCount),
-                "mpesa", Map.of("total", Math.round(mpesa * 100.0)/100.0, "count", mpesaCount),
-                "bank",  Map.of("total", Math.round(bank  * 100.0)/100.0, "count", bankCount)
-        ));
+                "cash", Map.of("total", Math.round(cash * 100.0) / 100.0, "count", cashCount),
+                "mpesa", Map.of("total", Math.round(mpesa * 100.0) / 100.0, "count", mpesaCount),
+                "bank", Map.of("total", Math.round(bank * 100.0) / 100.0, "count", bankCount)));
 
         // Chart + table data
-        resp.put("chartRevenue",  chartRevenue);
-        resp.put("chartProfit",   chartProfit);
-        resp.put("topProducts",   topProducts);
-        resp.put("recentSales",   recentTx);
-        resp.put("period",        period);
-        resp.put("periodLabel",   getPeriodLabel(period));
+        resp.put("chartRevenue", chartRevenue);
+        resp.put("chartProfit", chartProfit);
+        resp.put("topProducts", topProducts);
+        resp.put("recentSales", recentTx);
+        resp.put("period", period);
+        resp.put("periodLabel", getPeriodLabel(period));
 
         // Inventory snapshot
         var products = productRepository.findAll();
@@ -151,16 +152,16 @@ public class AnalyticsController {
         LocalDateTime now = LocalDateTime.now();
         return switch (period.toLowerCase()) {
             case "monthly" -> now.withDayOfMonth(1).withHour(0).withMinute(0).withSecond(0).withNano(0);
-            case "yearly"  -> now.withDayOfYear(1).withHour(0).withMinute(0).withSecond(0).withNano(0);
-            default        -> now.withHour(0).withMinute(0).withSecond(0).withNano(0); // daily
+            case "yearly" -> now.withDayOfYear(1).withHour(0).withMinute(0).withSecond(0).withNano(0);
+            default -> now.withHour(0).withMinute(0).withSecond(0).withNano(0); // daily
         };
     }
 
     private String getPeriodLabel(String period) {
         return switch (period.toLowerCase()) {
             case "monthly" -> "This Month";
-            case "yearly"  -> "This Year";
-            default        -> "Today";
+            case "yearly" -> "This Year";
+            default -> "Today";
         };
     }
 
@@ -168,11 +169,12 @@ public class AnalyticsController {
     private Map<String, Double> buildChartData(List<Sale> sales, String period) {
         Map<String, Double> data = new LinkedHashMap<>();
         for (Sale s : sales) {
-            if (s.getTimestamp() == null) continue;
+            if (s.getTimestamp() == null)
+                continue;
             String key = switch (period.toLowerCase()) {
-                case "monthly" -> String.valueOf(s.getTimestamp().getDayOfMonth());  // day 1-31
-                case "yearly"  -> s.getTimestamp().getMonth().toString().substring(0, 3); // JAN..DEC
-                default        -> String.format("%02d:00", s.getTimestamp().getHour());    // 00:00-23:00
+                case "monthly" -> String.valueOf(s.getTimestamp().getDayOfMonth()); // day 1-31
+                case "yearly" -> s.getTimestamp().getMonth().toString().substring(0, 3); // JAN..DEC
+                default -> String.format("%02d:00", s.getTimestamp().getHour()); // 00:00-23:00
             };
             data.merge(key, s.getTotalAmount(), Double::sum);
         }
@@ -183,11 +185,12 @@ public class AnalyticsController {
     private Map<String, Double> buildProfitChartData(List<Sale> sales, String period) {
         Map<String, Double> data = new LinkedHashMap<>();
         for (Sale s : sales) {
-            if (s.getTimestamp() == null) continue;
+            if (s.getTimestamp() == null)
+                continue;
             String key = switch (period.toLowerCase()) {
                 case "monthly" -> String.valueOf(s.getTimestamp().getDayOfMonth());
-                case "yearly"  -> s.getTimestamp().getMonth().toString().substring(0, 3);
-                default        -> String.format("%02d:00", s.getTimestamp().getHour());
+                case "yearly" -> s.getTimestamp().getMonth().toString().substring(0, 3);
+                default -> String.format("%02d:00", s.getTimestamp().getHour());
             };
             double saleCost = 0;
             if (s.getItems() != null) {
