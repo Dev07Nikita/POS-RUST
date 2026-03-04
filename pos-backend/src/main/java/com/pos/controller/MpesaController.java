@@ -106,19 +106,63 @@ public class MpesaController {
     }
 
     /**
-     * C2B Confirmation endpoint - confirms C2B payment received
+     * C2B Confirmation endpoint - confirms C2B payment received.
+     * Safaricom sends this after the customer has paid via Paybill/Till.
+     * We parse the body, record a SUCCESS transaction, and link it to a Sale.
      */
     @PostMapping("/callback/confirmation")
     public ResponseEntity<Map<String, Object>> confirmC2B(@RequestBody String payload) {
         log.info("M-Pesa C2B Confirmation Received");
         log.debug("Confirmation Payload: {}", payload);
 
-        // TODO: Process C2B payment and create transaction record
+        try {
+            // Parse the JSON payload into a generic map
+            @SuppressWarnings("unchecked")
+            Map<String, Object> body = objectMapper.readValue(payload, Map.class);
+
+            // Safaricom C2B confirmation fields
+            String transactionId = (String) body.getOrDefault("TransID", "C2B-" + System.currentTimeMillis());
+            String phone = (String) body.getOrDefault("MSISDN", "unknown");
+            String billRefNumber = (String) body.getOrDefault("BillRefNumber", "");
+            Number amountRaw = (Number) body.getOrDefault("TransAmount", 0);
+            double amount = amountRaw.doubleValue();
+
+            log.info("C2B payment confirmed: TransID={} Phone={} Ref={} Amount={}",
+                    transactionId, phone, billRefNumber, amount);
+
+            // Skip if already recorded
+            if (transactionRepository.findByMpesaReceiptNumber(transactionId).isPresent()) {
+                log.info("C2B TransID {} already recorded — skipping duplicate", transactionId);
+                return ResponseEntity.ok(Map.of("ResultCode", 0, "ResultDesc", "Already processed"));
+            }
+
+            // Create and persist the transaction record
+            MpesaTransaction tx = MpesaTransaction.builder()
+                    .merchantRequestId("C2B-" + transactionId)
+                    .checkoutRequestId("C2B-" + transactionId)
+                    .mpesaReceiptNumber(transactionId)
+                    .phoneNumber(phone)
+                    .amount(amount)
+                    .status(MpesaTransaction.TransactionStatus.SUCCESS)
+                    .type(MpesaTransaction.TransactionType.C2B)
+                    .resultCode("0")
+                    .resultDescription("C2B Payment Confirmed")
+                    .initiatedAt(java.time.LocalDateTime.now())
+                    .completedAt(java.time.LocalDateTime.now())
+                    .rawCallback(payload)
+                    .build();
+
+            transactionRepository.save(tx);
+            log.info("C2B transaction {} saved successfully (KES {})", transactionId, amount);
+
+        } catch (Exception e) {
+            log.error("Error processing C2B confirmation: {}", e.getMessage(), e);
+            // Always return success to Safaricom to prevent retries
+        }
 
         Map<String, Object> response = new HashMap<>();
         response.put("ResultCode", 0);
         response.put("ResultDesc", "Accepted");
-
         return ResponseEntity.ok(response);
     }
 

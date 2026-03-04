@@ -16,6 +16,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.*;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
+import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.web.client.RestTemplate;
 
 import java.text.SimpleDateFormat;
@@ -89,9 +90,10 @@ public class MpesaService {
         String url = getBaseUrl() + "/oauth/v1/generate?grant_type=client_credentials";
 
         try {
-            ResponseEntity<Map<String, Object>> response = restTemplate.exchange(url, HttpMethod.GET, entity,
-                    (Class<Map<String, Object>>) (Class<?>) Map.class);
-            Map<?, ?> body = response.getBody();
+            ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
+                    url, HttpMethod.GET, entity, new ParameterizedTypeReference<Map<String, Object>>() {
+                    });
+            Map<String, Object> body = response.getBody();
             if (body == null || !body.containsKey("access_token")) {
                 throw new RuntimeException("M-Pesa authentication failed: no access_token in response");
             }
@@ -301,8 +303,9 @@ public class MpesaService {
             HttpEntity<Map<String, Object>> entity = new HttpEntity<>(body, headers);
             String url = getBaseUrl() + "/mpesa/stkpushquery/v1/query";
 
-            ResponseEntity<Map<String, Object>> response = restTemplate.postForEntity(url, entity,
-                    (Class<Map<String, Object>>) (Class<?>) Map.class);
+            ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
+                    url, HttpMethod.POST, entity, new ParameterizedTypeReference<Map<String, Object>>() {
+                    });
 
             Map<String, Object> responseBody = response.getBody();
             log.info("Transaction status query response: {}", responseBody);
@@ -405,8 +408,9 @@ public class MpesaService {
             // Use v2 endpoint as required by current Daraja API
             String url = getBaseUrl() + "/mpesa/c2b/v2/registerurl";
 
-            ResponseEntity<Map<String, Object>> response = restTemplate.postForEntity(url, entity,
-                    (Class<Map<String, Object>>) (Class<?>) Map.class);
+            ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
+                    url, HttpMethod.POST, entity, new ParameterizedTypeReference<Map<String, Object>>() {
+                    });
             Map<String, Object> resp = response.getBody();
 
             if (resp != null) {

@@ -16,17 +16,17 @@
 # ============================================================
 
 param(
-    [string]$ConsumerKey    = $env:MPESA_CONSUMER_KEY,
+    [string]$ConsumerKey = $env:MPESA_CONSUMER_KEY,
     [string]$ConsumerSecret = $env:MPESA_CONSUMER_SECRET,
-    [string]$Passkey        = $env:MPESA_PASSKEY,
-    [string]$Shortcode      = "600991",
+    [string]$Passkey = $env:MPESA_PASSKEY,
+    [string]$Shortcode = "600991",
     [string]$NgrokAuthToken = $env:NGROK_AUTHTOKEN   # optional, needed for stable URLs
 )
 
 $ErrorActionPreference = "Stop"
 $PropertiesFile = "$PSScriptRoot\pos-backend\src\main\resources\application.properties"
-$NgrokExe       = "$env:LOCALAPPDATA\ngrok\ngrok.exe"
-$NgrokApiUrl    = "http://localhost:4040/api/tunnels"
+$NgrokExe = "$env:LOCALAPPDATA\ngrok\ngrok.exe"
+$NgrokApiUrl = "http://localhost:4040/api/tunnels"
 
 Write-Host ""
 Write-Host "=====================================================" -ForegroundColor Cyan
@@ -54,7 +54,7 @@ if (-not (Test-Path $NgrokExe)) {
     $NgrokDir = "$env:LOCALAPPDATA\ngrok"
     
     Invoke-WebRequest -Uri "https://bin.equinox.io/c/bNyj1mQVY4c/ngrok-v3-stable-windows-amd64.zip" `
-                      -OutFile $NgrokZip -UseBasicParsing
+        -OutFile $NgrokZip -UseBasicParsing
     
     New-Item -ItemType Directory -Force -Path $NgrokDir | Out-Null
     Expand-Archive -Path $NgrokZip -DestinationPath $NgrokDir -Force
@@ -63,7 +63,8 @@ if (-not (Test-Path $NgrokExe)) {
     # Add to session PATH
     $env:PATH = "$NgrokDir;$env:PATH"
     Write-Host "  ngrok downloaded to $NgrokDir" -ForegroundColor Gray
-} else {
+}
+else {
     $env:PATH = "$env:LOCALAPPDATA\ngrok;$env:PATH"
 }
 
@@ -73,7 +74,8 @@ Write-Host "[2/5] ngrok ready ✓" -ForegroundColor Green
 if ($NgrokAuthToken) {
     & $NgrokExe config add-authtoken $NgrokAuthToken 2>&1 | Out-Null
     Write-Host "[3/5] ngrok auth token configured ✓" -ForegroundColor Green
-} else {
+}
+else {
     Write-Host "[3/5] No ngrok auth token — using anonymous tunnel (8hr limit)" -ForegroundColor Yellow
     Write-Host "      Get a free token at https://dashboard.ngrok.com/get-started/your-authtoken" -ForegroundColor Gray
 }
@@ -83,9 +85,9 @@ Get-Process -Name "ngrok" -ErrorAction SilentlyContinue | Stop-Process -Force
 Start-Sleep -Milliseconds 500
 
 Write-Host "[4/5] Starting ngrok tunnel on port 8080..." -ForegroundColor Yellow
-$NgrokProcess = Start-Process -FilePath $NgrokExe `
+Start-Process -FilePath $NgrokExe `
     -ArgumentList "http", "8080", "--log=stdout" `
-    -PassThru -WindowStyle Minimized
+    -PassThru -WindowStyle Minimized | Out-Null
 
 Start-Sleep -Seconds 3  # Give ngrok time to establish tunnel
 
@@ -94,12 +96,13 @@ $PublicUrl = $null
 for ($i = 0; $i -lt 10; $i++) {
     try {
         $tunnels = Invoke-RestMethod -Uri $NgrokApiUrl -ErrorAction Stop
-        $https   = $tunnels.tunnels | Where-Object { $_.proto -eq "https" }
+        $https = $tunnels.tunnels | Where-Object { $_.proto -eq "https" }
         if ($https) {
             $PublicUrl = $https.public_url.TrimEnd('/')
             break
         }
-    } catch { }
+    }
+    catch { }
     Start-Sleep -Seconds 1
 }
 
@@ -109,9 +112,9 @@ if (-not $PublicUrl) {
     exit 1
 }
 
-$CallbackUrl    = "$PublicUrl/api/mpesa/callback"
-$ConfirmUrl     = "$PublicUrl/api/mpesa/callback/confirmation"
-$ValidationUrl  = "$PublicUrl/api/mpesa/callback/validation"
+$CallbackUrl = "$PublicUrl/api/mpesa/callback"
+$ConfirmUrl = "$PublicUrl/api/mpesa/callback/confirmation"
+$ValidationUrl = "$PublicUrl/api/mpesa/callback/validation"
 
 Write-Host ""
 Write-Host "  Public URL  : $PublicUrl" -ForegroundColor Cyan
