@@ -1082,10 +1082,10 @@ function applyPermissions(role) {
     const permissions = {
         'ADMIN': ['menuInventory', 'menuReports', 'menuLogistics', 'menuAdmin', 'menuBranches', 'menuSupport'],
         'MANAGER': ['menuInventory', 'menuReports', 'menuBranches', 'menuSupport'],
-        'LOGISTICS': ['menuLogistics', 'menuSupport'],
-        'CASHIER': ['menuSupport'],
-        'SALES': ['menuReports', 'menuSupport'],
-        'USER': ['menuSupport']
+        'LOGISTICS': ['menuLogistics', 'menuBranches', 'menuSupport'],
+        'CASHIER': ['menuBranches', 'menuSupport'],
+        'SALES': ['menuReports', 'menuBranches', 'menuSupport'],
+        'USER': ['menuBranches', 'menuSupport']
     };
 
     // Hide ALL privileged menus first
@@ -1095,20 +1095,24 @@ function applyPermissions(role) {
     });
 
     // Show allowed menus for this role
-    (permissions[role] || []).forEach(id => {
+    (permissions[role] || permissions['USER']).forEach(id => {
         const el = document.getElementById(id);
         if (el) el.classList.remove('hidden');
     });
 
-    // Wire up dynamic-onclick menus
+    // Always ensure Branches is visible — every staff member should see company locations
+    const branchesBtn = document.getElementById('menuBranches');
+    if (branchesBtn) {
+        branchesBtn.classList.remove('hidden');
+        branchesBtn.onclick = () => switchView('branches');
+    }
+
+    // Wire up other dynamic menus
     const logisticsBtn = document.getElementById('menuLogistics');
     if (logisticsBtn) logisticsBtn.onclick = () => switchView('logistics');
 
     const adminBtn = document.getElementById('menuAdmin');
     if (adminBtn) adminBtn.onclick = () => switchView('admin');
-
-    const branchesBtn = document.getElementById('menuBranches');
-    if (branchesBtn) branchesBtn.onclick = () => switchView('branches');
 }
 
 // ============================================================
