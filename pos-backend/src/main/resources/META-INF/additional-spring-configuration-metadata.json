@@ -1,0 +1,45 @@
+{
+    "properties": [
+        {
+            "name": "mpesa.environment",
+            "type": "java.lang.String",
+            "description": "M-Pesa API environment: 'sandbox' or 'production'.",
+            "defaultValue": "sandbox"
+        },
+        {
+            "name": "mpesa.consumer.key",
+            "type": "java.lang.String",
+            "description": "Safaricom Daraja consumer key from the developer portal."
+        },
+        {
+            "name": "mpesa.consumer.secret",
+            "type": "java.lang.String",
+            "description": "Safaricom Daraja consumer secret from the developer portal."
+        },
+        {
+            "name": "mpesa.shortcode",
+            "type": "java.lang.String",
+            "description": "M-Pesa STK push business shortcode (e.g. 174379 for sandbox)."
+        },
+        {
+            "name": "mpesa.c2b.shortcode",
+            "type": "java.lang.String",
+            "description": "M-Pesa C2B (customer-to-business) shortcode."
+        },
+        {
+            "name": "mpesa.passkey",
+            "type": "java.lang.String",
+            "description": "M-Pesa Lipa Na M-Pesa passkey for STK push."
+        },
+        {
+            "name": "mpesa.public.url",
+            "type": "java.lang.String",
+            "description": "Publicly reachable base URL for callbacks (ngrok / Cloudflare tunnel)."
+        },
+        {
+            "name": "mpesa.callback.url",
+            "type": "java.lang.String",
+            "description": "Full callback URL sent to Safaricom for STK push responses."
+        }
+    ]
+}

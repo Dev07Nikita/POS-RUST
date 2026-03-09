@@ -1122,196 +1122,232 @@ function applyPermissions(role) {
 async function loadBranches() {
     const content = document.getElementById('branches-content');
     if (!content) return;
-    content.innerHTML = '<p class="text-center text-slate-500 py-12">Loading branches...</p>';
+    content.innerHTML = '<div class="flex items-center justify-center py-16 gap-3"><div class="w-6 h-6 border-2 border-amber-500 border-t-transparent rounded-full animate-spin"></div><p class="text-slate-400 font-bold">Loading branches...</p></div>';
     try {
         const [branchResp, summaryResp] = await Promise.all([
             fetch('http://localhost:8080/api/branches'),
             fetch('http://localhost:8080/api/branches/summary')
         ]);
-        const branches = branchResp.ok ? await branchResp.json() : [];
-        const summary = summaryResp.ok ? await summaryResp.json() : {};
+        if (!branchResp.ok) throw new Error('Backend responded with ' + branchResp.status);
+        const branches = await branchResp.json();
+        const summary = summaryResp.ok ? await summaryResp.json() : { total: branches.length, active: 0, inactive: 0, totalStaff: 0 };
 
         content.innerHTML = `
-            <!-- Summary Stats -->
+            <!-- Summary Stats Row -->
             <div class="grid grid-cols-4 gap-4 mb-7">
-                <div class="bg-slate-800 p-5 rounded-2xl border border-slate-700">
-                    <p class="text-slate-400 text-xs font-bold uppercase mb-1">Total Branches</p>
-                    <p class="text-3xl font-black text-white">${summary.total || branches.length}</p>
+                <div class="bg-slate-800 p-5 rounded-2xl border border-slate-700 text-center">
+                    <p class="text-slate-400 text-xs font-bold uppercase mb-1">Total</p>
+                    <p class="text-3xl font-black text-white">${summary.total ?? branches.length}</p>
                 </div>
-                <div class="bg-green-900/30 p-5 rounded-2xl border border-green-500/30">
+                <div class="bg-green-900/30 p-5 rounded-2xl border border-green-500/30 text-center">
                     <p class="text-green-400 text-xs font-bold uppercase mb-1">Active</p>
-                    <p class="text-3xl font-black text-green-400">${summary.active || 0}</p>
+                    <p class="text-3xl font-black text-green-400">${summary.active ?? 0}</p>
                 </div>
-                <div class="bg-red-900/30 p-5 rounded-2xl border border-red-500/30">
+                <div class="bg-red-900/30 p-5 rounded-2xl border border-red-500/30 text-center">
                     <p class="text-red-400 text-xs font-bold uppercase mb-1">Inactive</p>
-                    <p class="text-3xl font-black text-red-400">${summary.inactive || 0}</p>
+                    <p class="text-3xl font-black text-red-400">${summary.inactive ?? 0}</p>
                 </div>
-                <div class="bg-blue-900/30 p-5 rounded-2xl border border-blue-500/30">
+                <div class="bg-blue-900/30 p-5 rounded-2xl border border-blue-500/30 text-center">
                     <p class="text-blue-400 text-xs font-bold uppercase mb-1">Total Staff</p>
-                    <p class="text-3xl font-black text-blue-400">${summary.totalStaff || 0}</p>
+                    <p class="text-3xl font-black text-blue-400">${summary.totalStaff ?? 0}</p>
                 </div>
             </div>
 
-            <!-- Branch Cards -->
-            <div class="grid grid-cols-2 gap-4">
+            <!-- Branch Cards Grid -->
+            <div class="grid grid-cols-2 gap-5">
                 ${branches.length === 0
-                ? '<div class="col-span-2 text-center py-12 text-slate-500"><p class="text-4xl mb-3">🏪</p><p class="font-bold">No branches found</p><p class="text-sm mt-1">Add your first branch using the button above</p></div>'
+                ? `<div class="col-span-2 text-center py-16">
+                           <p class="text-5xl mb-4">🏪</p>
+                           <p class="font-black text-lg text-slate-300">No Branches Yet</p>
+                           <p class="text-slate-500 text-sm mt-2">Click <strong>NEW BRANCH</strong> above to add your first location.</p>
+                       </div>`
                 : branches.map(b => `
-                    <div class="bg-slate-800 rounded-2xl border ${b.active ? 'border-slate-700' : 'border-red-900/50 opacity-70'
-                    } p-5 flex flex-col gap-3 hover:border-amber-500/40 transition-all">
-                        <!-- Branch Header -->
-                        <div class="flex justify-between items-start">
-                            <div>
+                    <div class="bg-slate-800/80 rounded-2xl border ${b.active ? 'border-slate-700 hover:border-amber-500/50' : 'border-red-900/40 opacity-80'} p-5 flex flex-col gap-3 transition-all duration-200">
+
+                        <!-- Header: name + status badge -->
+                        <div class="flex justify-between items-start gap-2">
+                            <div class="flex-1 min-w-0">
                                 <div class="flex items-center gap-2 mb-1">
-                                    <span class="w-2 h-2 rounded-full ${b.active ? 'bg-green-500 animate-pulse' : 'bg-red-500'
-                    }"></span>
-                                    <p class="text-[10px] font-black uppercase tracking-wider ${b.active ? 'text-green-500' : 'text-red-400'
-                    }">${b.active ? 'ACTIVE' : 'INACTIVE'}</p>
+                                    <span class="w-2 h-2 rounded-full flex-shrink-0 ${b.active ? 'bg-green-500 animate-pulse' : 'bg-red-500'}"></span>
+                                    <span class="text-[10px] font-black uppercase tracking-wider ${b.active ? 'text-green-400' : 'text-red-400'}">${b.active ? 'ACTIVE' : 'INACTIVE'}</span>
+                                    ${b.code ? `<span class="text-[10px] font-bold text-amber-500/70 bg-amber-500/10 px-2 py-0.5 rounded-full">${b.code}</span>` : ''}
                                 </div>
-                                <h3 class="font-black text-base text-white">${b.name}</h3>
-                                <p class="text-[11px] text-amber-500 font-bold">${b.code || ''}</p>
+                                <h3 class="font-black text-base text-white leading-tight truncate">${b.name}</h3>
                             </div>
-                            <div class="flex gap-2">
-                                <button onclick="openEditBranchModal(${b.id})" 
-                                    class="p-2 glass rounded-lg text-slate-400 hover:text-amber-500 text-sm" title="Edit">✏️</button>
-                                <button onclick="toggleBranch(${b.id})" 
-                                    class="p-2 glass rounded-lg text-slate-400 hover:text-green-400 text-sm" title="Toggle Active">
-                                    ${b.active ? '🔴' : '🟢'}
+
+                            <!-- Action buttons -->
+                            <div class="flex gap-1.5 flex-shrink-0">
+                                <button onclick="openEditBranchModal(${b.id})"
+                                    title="Edit branch"
+                                    class="px-3 py-2 bg-amber-500/10 hover:bg-amber-500/20 text-amber-500 rounded-xl text-xs font-black transition-all border border-amber-500/20 hover:border-amber-500/50">
+                                    ✏️ Edit
+                                </button>
+                                <button onclick="confirmDeleteBranch(${b.id}, '${b.name.replace(/'/g, "\\'")}')"
+                                    title="Delete branch"
+                                    class="px-3 py-2 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded-xl text-xs font-black transition-all border border-red-500/20 hover:border-red-500/50">
+                                    🗑️
+                                </button>
+                                <button onclick="toggleBranch(${b.id})"
+                                    title="${b.active ? 'Deactivate' : 'Activate'} branch"
+                                    class="px-3 py-2 ${b.active ? 'bg-red-900/20 hover:bg-red-900/40 text-red-400 border-red-900/30' : 'bg-green-900/20 hover:bg-green-900/40 text-green-400 border-green-900/30'} rounded-xl text-xs font-black transition-all border">
+                                    ${b.active ? '⏸️' : '▶️'}
                                 </button>
                             </div>
                         </div>
 
-                        <!-- Branch Details -->
-                        <div class="space-y-1.5 text-[12px] text-slate-400">
-                            <div class="flex items-center gap-2">
-                                <span class="text-base">📍</span>
-                                <span>${b.location || 'No address set'}, ${b.city || ''}</span>
+                        <!-- Branch details -->
+                        <div class="space-y-1.5 text-xs text-slate-400 border-t border-slate-700/60 pt-3">
+                            <div class="flex items-start gap-2">
+                                <span class="text-sm flex-shrink-0 mt-0.5">📍</span>
+                                <span class="leading-tight">${[b.location, b.city].filter(Boolean).join(', ') || 'No address set'}</span>
                             </div>
                             <div class="flex items-center gap-2">
-                                <span class="text-base">👤</span>
-                                <span>${b.managerName || 'No manager assigned'}</span>
+                                <span class="text-sm flex-shrink-0">👤</span>
+                                <span>${b.managerName || '<em class="text-slate-600">No manager</em>'}</span>
                             </div>
                             <div class="flex items-center gap-2">
-                                <span class="text-base">📞</span>
-                                <span>${b.managerPhone || 'No phone'}</span>
+                                <span class="text-sm flex-shrink-0">📞</span>
+                                <span>${b.managerPhone || '<em class="text-slate-600">No phone</em>'}</span>
                             </div>
-                            <div class="flex items-center gap-2">
-                                <span class="text-base">✉️</span>
-                                <span class="text-amber-500/80">${b.email || 'No email'}</span>
-                            </div>
+                            ${b.email ? `<div class="flex items-center gap-2">
+                                <span class="text-sm flex-shrink-0">✉️</span>
+                                <span class="text-amber-500/70 truncate">${b.email}</span>
+                            </div>` : ''}
                         </div>
 
-                        <!-- Staff Badge -->
-                        <div class="flex justify-between items-center pt-2 border-t border-slate-700">
-                            <span class="text-[11px] text-slate-500">Staff Count</span>
-                            <span class="px-3 py-1 bg-amber-500/10 text-amber-500 rounded-full text-[11px] font-black">${b.staffCount || 0} staff</span>
+                        <!-- Staff count footer -->
+                        <div class="flex justify-between items-center pt-2 border-t border-slate-700/60 mt-auto">
+                            <span class="text-[11px] text-slate-500 font-bold uppercase tracking-wider">Staff</span>
+                            <span class="px-3 py-1 bg-amber-500/10 text-amber-400 rounded-full text-xs font-black border border-amber-500/20">
+                                ${b.staffCount ?? 0} members
+                            </span>
                         </div>
                     </div>`).join('')
             }
-            </div>
-        `;
+            </div>`;
     } catch (e) {
         content.innerHTML = `
             <div class="text-center py-16">
-                <p class="text-5xl mb-4">🏪</p>
-                <p class="font-bold text-slate-400">Could not load branches</p>
-                <p class="text-slate-500 text-sm mt-2">Ensure Spring Boot is running on port 8080</p>
-                <button onclick="loadBranches()" class="mt-4 px-6 py-2 glass rounded-xl text-sm font-bold border border-slate-600">Retry</button>
+                <p class="text-5xl mb-4">🔌</p>
+                <p class="font-black text-lg text-slate-300">Cannot Reach Backend</p>
+                <p class="text-slate-500 text-sm mt-2 mb-1">Make sure Spring Boot is running on port <strong>8080</strong></p>
+                <code class="text-xs text-amber-400 bg-slate-800 px-3 py-1 rounded-lg">cd pos-backend &amp;&amp; ./gradlew bootRun</code>
+                <br><button onclick="loadBranches()" class="mt-5 px-6 py-2.5 gold-gradient rounded-xl text-sm font-black text-slate-900">🔄 Retry</button>
             </div>`;
     }
 }
 
-function openAddBranchModal() {
-    const html = `
-        <h2 class="text-2xl font-bold mb-6">🏪 Add New Branch</h2>
-        <div class="space-y-4 text-left">
-            <div class="grid grid-cols-2 gap-4">
+/** Branch form modal — shared for Add and Edit */
+function branchFormHTML(b = {}) {
+    const val = (k, d = '') => b[k] != null ? String(b[k]).replace(/"/g, '&quot;') : d;
+    const isEdit = !!b.id;
+    return `
+        <div class="text-left">
+            <div class="flex items-center gap-3 mb-6">
+                <span class="text-3xl">${isEdit ? '✏️' : '🏪'}</span>
                 <div>
-                    <label class="text-xs text-slate-400 font-bold uppercase mb-1 block">Branch Name</label>
-                    <input id="br-name" type="text" placeholder="e.g. Westlands Branch" class="w-full bg-slate-700 p-3 rounded-xl border border-slate-600 text-white outline-none focus:border-amber-500">
-                </div>
-                <div>
-                    <label class="text-xs text-slate-400 font-bold uppercase mb-1 block">Branch Code</label>
-                    <input id="br-code" type="text" placeholder="e.g. WL-001" class="w-full bg-slate-700 p-3 rounded-xl border border-slate-600 text-white outline-none focus:border-amber-500">
-                </div>
-            </div>
-            <div>
-                <label class="text-xs text-slate-400 font-bold uppercase mb-1 block">Location / Address</label>
-                <input id="br-location" type="text" placeholder="Building, Street" class="w-full bg-slate-700 p-3 rounded-xl border border-slate-600 text-white outline-none focus:border-amber-500">
-            </div>
-            <div>
-                <label class="text-xs text-slate-400 font-bold uppercase mb-1 block">City</label>
-                <input id="br-city" type="text" placeholder="Nairobi" class="w-full bg-slate-700 p-3 rounded-xl border border-slate-600 text-white outline-none focus:border-amber-500">
-            </div>
-            <div class="grid grid-cols-2 gap-4">
-                <div>
-                    <label class="text-xs text-slate-400 font-bold uppercase mb-1 block">Manager Name</label>
-                    <input id="br-manager" type="text" placeholder="Full Name" class="w-full bg-slate-700 p-3 rounded-xl border border-slate-600 text-white outline-none focus:border-amber-500">
-                </div>
-                <div>
-                    <label class="text-xs text-slate-400 font-bold uppercase mb-1 block">Manager Phone</label>
-                    <input id="br-phone" type="tel" placeholder="07XXXXXXXX" class="w-full bg-slate-700 p-3 rounded-xl border border-slate-600 text-white outline-none focus:border-amber-500">
+                    <h2 class="text-2xl font-black">${isEdit ? 'Edit Branch' : 'Add New Branch'}</h2>
+                    <p class="text-xs text-slate-400">${isEdit ? 'Update branch details below' : 'Fill in your branch information'}</p>
                 </div>
             </div>
-            <div class="grid grid-cols-2 gap-4">
-                <div>
-                    <label class="text-xs text-slate-400 font-bold uppercase mb-1 block">Email</label>
-                    <input id="br-email" type="email" placeholder="branch@company.co.ke" class="w-full bg-slate-700 p-3 rounded-xl border border-slate-600 text-white outline-none focus:border-amber-500">
+            ${b.id ? `<input type="hidden" id="br-edit-id" value="${b.id}">` : ''}
+            <div class="space-y-4">
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="text-xs text-amber-400 font-black uppercase mb-1.5 block">Branch Name *</label>
+                        <input id="br-name" type="text" value="${val('name')}" placeholder="e.g. Westlands Branch"
+                            class="w-full bg-slate-700/80 p-3 rounded-xl border border-slate-600 text-white outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500/30 transition-all">
+                    </div>
+                    <div>
+                        <label class="text-xs text-slate-400 font-black uppercase mb-1.5 block">Branch Code</label>
+                        <input id="br-code" type="text" value="${val('code')}" placeholder="e.g. WL-001"
+                            class="w-full bg-slate-700/80 p-3 rounded-xl border border-slate-600 text-white outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500/30 transition-all">
+                    </div>
                 </div>
-                <div>
-                    <label class="text-xs text-slate-400 font-bold uppercase mb-1 block">Staff Count</label>
-                    <input id="br-staff" type="number" placeholder="0" class="w-full bg-slate-700 p-3 rounded-xl border border-slate-600 text-white outline-none focus:border-amber-500">
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="text-xs text-slate-400 font-black uppercase mb-1.5 block">Location / Street</label>
+                        <input id="br-location" type="text" value="${val('location')}" placeholder="Building & Street"
+                            class="w-full bg-slate-700/80 p-3 rounded-xl border border-slate-600 text-white outline-none focus:border-amber-500 transition-all">
+                    </div>
+                    <div>
+                        <label class="text-xs text-slate-400 font-black uppercase mb-1.5 block">City / Town</label>
+                        <input id="br-city" type="text" value="${val('city')}" placeholder="Nairobi"
+                            class="w-full bg-slate-700/80 p-3 rounded-xl border border-slate-600 text-white outline-none focus:border-amber-500 transition-all">
+                    </div>
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="text-xs text-slate-400 font-black uppercase mb-1.5 block">Manager Name</label>
+                        <input id="br-manager" type="text" value="${val('managerName')}" placeholder="Full Name"
+                            class="w-full bg-slate-700/80 p-3 rounded-xl border border-slate-600 text-white outline-none focus:border-amber-500 transition-all">
+                    </div>
+                    <div>
+                        <label class="text-xs text-slate-400 font-black uppercase mb-1.5 block">Manager Phone</label>
+                        <input id="br-phone" type="tel" value="${val('managerPhone')}" placeholder="07XXXXXXXX"
+                            class="w-full bg-slate-700/80 p-3 rounded-xl border border-slate-600 text-white outline-none focus:border-amber-500 transition-all">
+                    </div>
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="text-xs text-slate-400 font-black uppercase mb-1.5 block">Email Address</label>
+                        <input id="br-email" type="email" value="${val('email')}" placeholder="branch@company.co.ke"
+                            class="w-full bg-slate-700/80 p-3 rounded-xl border border-slate-600 text-white outline-none focus:border-amber-500 transition-all">
+                    </div>
+                    <div>
+                        <label class="text-xs text-slate-400 font-black uppercase mb-1.5 block">Staff Count</label>
+                        <input id="br-staff" type="number" min="0" value="${val('staffCount', '0')}" placeholder="0"
+                            class="w-full bg-slate-700/80 p-3 rounded-xl border border-slate-600 text-white outline-none focus:border-amber-500 transition-all">
+                    </div>
+                </div>
+                <div class="flex gap-3 pt-2">
+                    <button onclick="saveBranch(${b.id || 'null'})"
+                        class="flex-grow py-4 gold-gradient rounded-xl font-black text-base text-slate-900 hover:scale-[1.02] transition-all shadow-lg shadow-amber-900/30">
+                        ${isEdit ? '💾 UPDATE BRANCH' : '➕ ADD BRANCH'}
+                    </button>
+                    <button onclick="closeEditModal()"
+                        class="px-6 py-4 glass rounded-xl font-bold border border-slate-600 hover:border-slate-400 transition-all text-slate-300">
+                        Cancel
+                    </button>
                 </div>
             </div>
-            <button onclick="saveBranch()" class="w-full py-4 gold-gradient rounded-xl font-bold text-lg mt-2">ADD BRANCH</button>
-            <button onclick="closeEditModal()" class="w-full text-slate-500 text-sm">Cancel</button>
         </div>`;
-    openEditModal(html);
+}
+
+function openAddBranchModal() {
+    openEditModal(branchFormHTML());
+    setTimeout(() => document.getElementById('br-name')?.focus(), 100);
 }
 
 function openEditBranchModal(id) {
+    // Show loading state first
+    openEditModal('<div class="text-center py-12"><div class="w-8 h-8 border-2 border-amber-500 border-t-transparent rounded-full animate-spin mx-auto mb-3"></div><p class="text-slate-400">Loading branch...</p></div>');
     fetch(`http://localhost:8080/api/branches/${id}`)
-        .then(r => r.json())
-        .then(b => {
-            const html = `
-                <h2 class="text-2xl font-bold mb-6">✏️ Edit Branch</h2>
-                <input type="hidden" id="br-edit-id" value="${b.id}">
-                <div class="space-y-4 text-left">
-                    <div class="grid grid-cols-2 gap-4">
-                        <div>
-                            <label class="text-xs text-slate-400 font-bold uppercase mb-1 block">Branch Name</label>
-                            <input id="br-name" type="text" value="${b.name || ''}" class="w-full bg-slate-700 p-3 rounded-xl border border-slate-600 text-white outline-none focus:border-amber-500">
-                        </div>
-                        <div>
-                            <label class="text-xs text-slate-400 font-bold uppercase mb-1 block">Branch Code</label>
-                            <input id="br-code" type="text" value="${b.code || ''}" class="w-full bg-slate-700 p-3 rounded-xl border border-slate-600 text-white outline-none focus:border-amber-500">
-                        </div>
-                    </div>
-                    <div><label class="text-xs text-slate-400 font-bold uppercase mb-1 block">Location</label>
-                        <input id="br-location" type="text" value="${b.location || ''}" class="w-full bg-slate-700 p-3 rounded-xl border border-slate-600 text-white outline-none focus:border-amber-500"></div>
-                    <div><label class="text-xs text-slate-400 font-bold uppercase mb-1 block">City</label>
-                        <input id="br-city" type="text" value="${b.city || ''}" class="w-full bg-slate-700 p-3 rounded-xl border border-slate-600 text-white outline-none focus:border-amber-500"></div>
-                    <div class="grid grid-cols-2 gap-4">
-                        <div><label class="text-xs text-slate-400 font-bold uppercase mb-1 block">Manager</label>
-                            <input id="br-manager" type="text" value="${b.managerName || ''}" class="w-full bg-slate-700 p-3 rounded-xl border border-slate-600 text-white outline-none focus:border-amber-500"></div>
-                        <div><label class="text-xs text-slate-400 font-bold uppercase mb-1 block">Phone</label>
-                            <input id="br-phone" type="tel" value="${b.managerPhone || ''}" class="w-full bg-slate-700 p-3 rounded-xl border border-slate-600 text-white outline-none focus:border-amber-500"></div>
-                    </div>
-                    <div class="grid grid-cols-2 gap-4">
-                        <div><label class="text-xs text-slate-400 font-bold uppercase mb-1 block">Email</label>
-                            <input id="br-email" type="email" value="${b.email || ''}" class="w-full bg-slate-700 p-3 rounded-xl border border-slate-600 text-white outline-none focus:border-amber-500"></div>
-                        <div><label class="text-xs text-slate-400 font-bold uppercase mb-1 block">Staff Count</label>
-                            <input id="br-staff" type="number" value="${b.staffCount || 0}" class="w-full bg-slate-700 p-3 rounded-xl border border-slate-600 text-white outline-none focus:border-amber-500"></div>
-                    </div>
-                    <button onclick="saveBranch(${b.id})" class="w-full py-4 gold-gradient rounded-xl font-bold text-lg mt-2">UPDATE BRANCH</button>
-                    <button onclick="closeEditModal()" class="w-full text-slate-500 text-sm">Cancel</button>
-                </div>`;
-            openEditModal(html);
+        .then(r => {
+            if (!r.ok) throw new Error('Branch not found');
+            return r.json();
         })
-        .catch(() => showNotification('Could not load branch details', '❌', 'Error'));
+        .then(b => {
+            document.getElementById('edit-content').innerHTML = branchFormHTML(b);
+        })
+        .catch(err => {
+            document.getElementById('edit-content').innerHTML = `
+                <div class="text-center py-8">
+                    <p class="text-4xl mb-3">❌</p>
+                    <p class="font-bold text-red-400">Could not load branch</p>
+                    <p class="text-slate-500 text-sm mt-1">${err.message}</p>
+                    <button onclick="closeEditModal()" class="mt-4 px-6 py-2 glass rounded-xl text-sm border border-slate-600">Close</button>
+                </div>`;
+        });
 }
 
 async function saveBranch(id = null) {
+    const nameEl = document.getElementById('br-name');
+    if (!nameEl || !nameEl.value.trim()) {
+        nameEl?.classList.add('border-red-500');
+        nameEl?.focus();
+        return showNotification('Branch name is required', '⚠️', 'Validation Error');
+    }
     const branch = {
         name: (document.getElementById('br-name')?.value || '').trim(),
         code: (document.getElementById('br-code')?.value || '').trim(),
@@ -1320,22 +1356,73 @@ async function saveBranch(id = null) {
         managerName: (document.getElementById('br-manager')?.value || '').trim(),
         managerPhone: (document.getElementById('br-phone')?.value || '').trim(),
         email: (document.getElementById('br-email')?.value || '').trim(),
-        staffCount: parseInt(document.getElementById('br-staff')?.value) || 0,
+        staffCount: parseInt(document.getElementById('br-staff')?.value || '0') || 0,
         active: true
     };
 
-    if (!branch.name) return showNotification('Branch name is required', '⚠️', 'Validation');
+    const url = id && id !== 'null' ? `http://localhost:8080/api/branches/${id}` : 'http://localhost:8080/api/branches';
+    const method = id && id !== 'null' ? 'PUT' : 'POST';
 
-    const url = id ? `http://localhost:8080/api/branches/${id}` : 'http://localhost:8080/api/branches';
-    const method = id ? 'PUT' : 'POST';
+    // Disable save button to prevent double-clicks
+    const saveBtn = document.querySelector('#edit-content button[onclick^="saveBranch"]');
+    if (saveBtn) { saveBtn.disabled = true; saveBtn.innerText = 'Saving...'; }
+
     try {
-        const resp = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(branch) });
+        const resp = await fetch(url, {
+            method,
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(branch)
+        });
         if (resp.ok) {
             closeEditModal();
-            showNotification(`Branch "${branch.name}" ${id ? 'updated' : 'added'} successfully!`, '✅', 'Saved');
+            showNotification(
+                `✅ Branch "${branch.name}" ${method === 'PUT' ? 'updated' : 'added'} successfully!`,
+                '✅', method === 'PUT' ? 'Branch Updated' : 'Branch Added'
+            );
             loadBranches();
         } else {
-            showNotification('Failed to save branch. Check the backend.', '❌', 'Error');
+            const err = await resp.text();
+            showNotification(`Server error ${resp.status}: ${err || 'Unknown error'}`, '❌', 'Save Failed');
+            if (saveBtn) { saveBtn.disabled = false; saveBtn.innerText = method === 'PUT' ? '💾 UPDATE BRANCH' : '➕ ADD BRANCH'; }
+        }
+    } catch (e) {
+        showNotification('Cannot connect to Spring Boot on port 8080.\nMake sure the backend is running.', '❌', 'Connection Error');
+        if (saveBtn) { saveBtn.disabled = false; saveBtn.innerText = method === 'PUT' ? '💾 UPDATE BRANCH' : '➕ ADD BRANCH'; }
+    }
+}
+
+/** Show inline confirmation before deleting */
+function confirmDeleteBranch(id, name) {
+    const html = `
+        <div class="text-center py-4">
+            <p class="text-5xl mb-4">🗑️</p>
+            <h3 class="text-xl font-black text-red-400 mb-2">Delete Branch?</h3>
+            <p class="text-slate-300 text-sm mb-1">You are about to permanently delete:</p>
+            <p class="font-black text-white text-base mb-5">"${name}"</p>
+            <p class="text-xs text-red-400/70 mb-6">⚠️ This action cannot be undone. All branch data will be lost.</p>
+            <div class="flex gap-3 justify-center">
+                <button onclick="deleteBranch(${id})"
+                    class="px-8 py-3 bg-red-600 hover:bg-red-500 rounded-xl font-black text-white transition-all">
+                    YES, DELETE
+                </button>
+                <button onclick="closeEditModal()"
+                    class="px-8 py-3 glass rounded-xl font-bold border border-slate-600 text-slate-300 hover:border-slate-400 transition-all">
+                    Cancel
+                </button>
+            </div>
+        </div>`;
+    openEditModal(html);
+}
+
+async function deleteBranch(id) {
+    try {
+        const resp = await fetch(`http://localhost:8080/api/branches/${id}`, { method: 'DELETE' });
+        if (resp.ok) {
+            closeEditModal();
+            showNotification('Branch deleted successfully.', '🗑️', 'Deleted');
+            loadBranches();
+        } else {
+            showNotification('Could not delete branch. Server error: ' + resp.status, '❌', 'Error');
         }
     } catch (e) {
         showNotification('Cannot connect to Spring Boot on port 8080', '❌', 'Connection Error');
@@ -1346,11 +1433,13 @@ async function toggleBranch(id) {
     try {
         const resp = await fetch(`http://localhost:8080/api/branches/${id}/toggle`, { method: 'PATCH' });
         if (resp.ok) { loadBranches(); }
-        else showNotification('Could not toggle branch status', '❌', 'Error');
+        else showNotification('Could not toggle branch status: ' + resp.status, '❌', 'Error');
     } catch (e) {
-        showNotification('Backend not reachable', '❌', 'Error');
+        showNotification('Backend not reachable on port 8080', '❌', 'Error');
     }
 }
+
+
 
 function renderProducts() {
     const filtered = state.products.filter(p => {
