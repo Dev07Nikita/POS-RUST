@@ -23,7 +23,7 @@ public class BranchController {
     /** Get all branches */
     @GetMapping
     public ResponseEntity<List<Branch>> getAllBranches() {
-        return ResponseEntity.ok(branchRepository.findByOrderByNameAsc());
+        return ResponseEntity.ok(branchRepository.findAllByOrderByNameAsc());
     }
 
     /** Get only active branches */
