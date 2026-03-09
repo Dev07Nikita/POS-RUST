@@ -286,6 +286,11 @@
                         <span class="material-icons text-lg">store</span>
                         Branches
                     </button>
+                    <button id="menuCustomers" onclick="switchView('customers')"
+                        class="w-full text-left px-4 py-3 rounded-xl hover:bg-white/5 flex items-center gap-3 font-bold text-sm text-slate-400 hidden">
+                        <span class="material-icons text-lg">people</span>
+                        Customers
+                    </button>
                     <button onclick="handleLogout()"
                         class="w-full text-left px-4 py-3 rounded-xl hover:bg-red-500/10 text-red-500 flex items-center gap-3 font-bold text-sm mt-4">
                         <span class="material-icons text-lg">logout</span>
@@ -578,10 +583,43 @@
         <!-- Cart Area with Scrollable Payment Options -->
         <aside class="glass rounded-3xl p-6 flex flex-col h-full relative overflow-hidden">
             <!-- Cart Header -->
-            <div class="flex justify-between items-center mb-4">
+            <div class="flex justify-between items-center mb-3">
                 <h2 class="text-xl font-bold">Cart Assets</h2>
-                <span id="cart-count"
-                    class="px-3 py-1 bg-amber-500 text-slate-900 rounded-full text-xs font-black">0</span>
+                <div class="flex items-center gap-2">
+                    <button onclick="openHeldOrders()" title="Recall parked order"
+                        class="p-1.5 glass rounded-lg text-slate-400 hover:text-amber-500 text-xs" id="held-orders-btn">
+                        <span class="material-icons text-base">pause_circle</span>
+                    </button>
+                    <span id="cart-count"
+                        class="px-3 py-1 bg-amber-500 text-slate-900 rounded-full text-xs font-black">0</span>
+                </div>
+            </div>
+
+            <!-- Customer Lookup (CRM) -->
+            <div class="mb-3 relative" id="customer-lookup-wrap">
+                <div class="flex gap-2">
+                    <input id="customer-search-input" type="text" placeholder="🔍 Search customer by phone or name..."
+                        oninput="searchCustomerInline(this.value)"
+                        class="flex-grow text-xs bg-slate-800/70 border border-slate-700 rounded-xl px-3 py-2 text-white outline-none focus:border-amber-500 transition-all">
+                    <button onclick="clearCustomer()" title="Clear customer" id="clear-customer-btn"
+                        class="px-2 py-1 glass rounded-lg text-slate-500 hover:text-red-400 text-xs hidden">
+                        <span class="material-icons text-sm">person_remove</span>
+                    </button>
+                </div>
+                <!-- Customer suggestions dropdown -->
+                <div id="customer-suggestions"
+                    class="hidden absolute top-full left-0 right-0 mt-1 bg-slate-800 border border-slate-700 rounded-xl z-50 shadow-xl max-h-40 overflow-y-auto">
+                </div>
+                <!-- Selected customer badge -->
+                <div id="selected-customer-badge"
+                    class="hidden mt-2 px-3 py-2 bg-amber-500/10 border border-amber-500/30 rounded-xl flex items-center justify-between">
+                    <div>
+                        <p id="sel-cust-name" class="text-xs font-black text-amber-400"></p>
+                        <p id="sel-cust-points" class="text-[10px] text-slate-400"></p>
+                    </div>
+                    <span class="text-[10px] font-black text-amber-500 bg-amber-500/10 px-2 py-0.5 rounded-full">CRM
+                        ✓</span>
+                </div>
             </div>
 
             <!-- Scrollable Container -->
@@ -596,7 +634,7 @@
                     </div>
                 </div>
 
-                <!-- Scroll Indicator - Appears when there's more content below -->
+                <!-- Scroll Indicator -->
                 <div id="scroll-indicator" class="absolute bottom-0 left-0 right-0 h-20 pointer-events-none hidden"
                     style="background: linear-gradient(to bottom, transparent, rgba(15, 23, 42, 0.95));">
                     <div class="flex justify-center items-end h-full pb-4">
@@ -609,15 +647,38 @@
                 <!-- Total and Payment Section -->
                 <div id="payment-section"
                     class="sticky bottom-0 bg-slate-900/95 backdrop-blur-sm rounded-2xl p-4 border border-slate-700/50">
+
+                    <!-- Discount Row -->
+                    <div class="mb-3" id="discount-row">
+                        <div class="flex gap-2 items-center">
+                            <input id="discount-input" type="number" min="0" placeholder="Discount"
+                                onchange="applyDiscount()"
+                                class="w-24 text-xs bg-slate-800 border border-slate-700 rounded-lg px-2 py-1.5 text-white outline-none focus:border-amber-500">
+                            <select id="discount-type" onchange="applyDiscount()"
+                                class="text-xs bg-slate-800 border border-slate-700 rounded-lg px-2 py-1.5 text-white outline-none focus:border-amber-500">
+                                <option value="PERCENT">% Off</option>
+                                <option value="FIXED">KES Off</option>
+                            </select>
+                            <button onclick="clearDiscount()" class="text-xs text-slate-500 hover:text-red-400">✕
+                                Clear</button>
+                            <div class="ml-auto text-xs text-green-400 font-bold" id="discount-label"></div>
+                        </div>
+                    </div>
+
                     <!-- Total -->
-                    <div class="flex justify-between text-2xl font-bold text-white mb-4 pb-4 border-b border-slate-700">
+                    <div class="flex justify-between text-2xl font-bold text-white mb-1 pb-2 border-b border-slate-700">
                         <span>Total KES</span>
                         <span id="total-val" class="text-amber-500">0.00</span>
                     </div>
+                    <div id="final-amount-row"
+                        class="hidden flex justify-between text-sm font-bold text-green-400 mb-3">
+                        <span>After Discount</span>
+                        <span id="final-val">0.00</span>
+                    </div>
 
                     <!-- Payment Options -->
-                    <div class="space-y-3">
-                        <p class="text-xs font-bold text-slate-500 uppercase mb-2">Payment Methods</p>
+                    <div class="space-y-2">
+                        <p class="text-xs font-bold text-slate-500 uppercase mb-1">Payment Methods</p>
 
                         <button onclick="openPaymentModal('M-PESA')"
                             class="w-full py-4 gold-gradient rounded-2xl font-bold text-lg hover:scale-[1.01] transition shadow-lg shadow-amber-900/20 flex items-center justify-center gap-2">
@@ -625,12 +686,16 @@
                             M-PESA PAYMENTS
                         </button>
 
-
-
                         <button onclick="processCash()"
                             class="w-full py-3 glass rounded-xl font-bold border-slate-500/30 flex items-center justify-center gap-2">
                             <span class="material-icons">payments</span>
                             CASH PAYMENT
+                        </button>
+
+                        <button onclick="holdCurrentOrder()" id="hold-order-btn"
+                            class="w-full py-2.5 glass rounded-xl font-bold text-slate-400 border border-slate-700 hover:border-amber-500/30 hover:text-amber-400 flex items-center justify-center gap-2 text-sm">
+                            <span class="material-icons text-base">pause_circle</span>
+                            HOLD ORDER
                         </button>
                     </div>
                 </div>
