@@ -814,6 +814,12 @@
                             <span class="material-icons text-base">pause_circle</span>
                             HOLD ORDER
                         </button>
+
+                        <button onclick="openSplitPaymentModal()"
+                            class="w-full py-2.5 glass rounded-xl font-bold text-slate-400 border border-slate-700 hover:border-blue-500/30 hover:text-blue-400 flex items-center justify-center gap-2 text-sm">
+                            <span class="material-icons text-base">call_split</span>
+                            SPLIT PAYMENT
+                        </button>
                     </div>
                 </div>
             </div>
@@ -877,6 +883,7 @@
     </div>
 
     <script src="js/app.js"></script>
+    <script src="js/features.js"></script>
     <script>
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
