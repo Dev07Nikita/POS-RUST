@@ -339,7 +339,7 @@ async function syncProductsFromHub() {
 }
 
 function switchView(view) {
-    const views = ['viewCheckout', 'viewInventory', 'viewAnalytics', 'viewSupport', 'viewLogistics', 'viewAdmin', 'viewBranches', 'viewCustomers'];
+    const views = ['viewCheckout', 'viewInventory', 'viewAnalytics', 'viewSupport', 'viewLogistics', 'viewAdmin', 'viewBranches', 'viewCustomers', 'viewExpenses', 'viewSuppliers', 'viewShifts'];
     views.forEach(id => {
         const el = document.getElementById(id);
         if (el) el.classList.add('hidden');
@@ -385,6 +385,18 @@ function switchView(view) {
         const custView = document.getElementById('viewCustomers');
         if (custView) { custView.classList.remove('hidden'); loadCustomers(); }
         activateMenuBtn('menuCustomers');
+    } else if (view === 'expenses') {
+        const el = document.getElementById('viewExpenses');
+        if (el) { el.classList.remove('hidden'); loadExpenses(); }
+        activateMenuBtn('menuExpenses');
+    } else if (view === 'suppliers') {
+        const el = document.getElementById('viewSuppliers');
+        if (el) { el.classList.remove('hidden'); loadSuppliers(); }
+        activateMenuBtn('menuSuppliers');
+    } else if (view === 'shifts') {
+        const el = document.getElementById('viewShifts');
+        if (el) { el.classList.remove('hidden'); loadShifts(); }
+        activateMenuBtn('menuShifts');
     }
 }
 
@@ -1104,38 +1116,42 @@ async function loadAdminHub() {
 
 function applyPermissions(role) {
     const permissions = {
-        'ADMIN':     ['menuInventory', 'menuReports', 'menuLogistics', 'menuAdmin', 'menuBranches', 'menuCustomers', 'menuSupport'],
-        'MANAGER':   ['menuInventory', 'menuReports', 'menuBranches', 'menuCustomers', 'menuSupport'],
-        'LOGISTICS': ['menuLogistics', 'menuBranches', 'menuCustomers', 'menuSupport'],
+        'ADMIN':     ['menuInventory', 'menuReports', 'menuLogistics', 'menuAdmin', 'menuBranches', 'menuCustomers', 'menuExpenses', 'menuSuppliers', 'menuSupport'],
+        'MANAGER':   ['menuInventory', 'menuReports', 'menuBranches', 'menuCustomers', 'menuExpenses', 'menuSuppliers', 'menuSupport'],
+        'LOGISTICS': ['menuLogistics', 'menuBranches', 'menuCustomers', 'menuSuppliers', 'menuSupport'],
         'CASHIER':   ['menuBranches', 'menuCustomers', 'menuSupport'],
         'SALES':     ['menuReports', 'menuBranches', 'menuCustomers', 'menuSupport'],
         'USER':      ['menuBranches', 'menuCustomers', 'menuSupport']
     };
 
-    // Hide ALL privileged menus first
-    ['menuInventory', 'menuReports', 'menuLogistics', 'menuAdmin', 'menuBranches', 'menuCustomers', 'menuSupport'].forEach(id => {
-        const el = document.getElementById(id);
-        if (el) el.classList.add('hidden');
-    });
+    const allPriv = ['menuInventory', 'menuReports', 'menuLogistics', 'menuAdmin', 'menuBranches', 'menuCustomers', 'menuExpenses', 'menuSuppliers', 'menuSupport'];
+    allPriv.forEach(id => { const el = document.getElementById(id); if (el) el.classList.add('hidden'); });
+    (permissions[role] || permissions['USER']).forEach(id => { const el = document.getElementById(id); if (el) el.classList.remove('hidden'); });
 
-    // Show allowed menus for this role
-    (permissions[role] || permissions['USER']).forEach(id => {
+    // Always visible regardless of role
+    ['menuBranches', 'menuCustomers', 'menuShifts'].forEach(id => {
         const el = document.getElementById(id);
         if (el) el.classList.remove('hidden');
     });
 
-    // Wire up dynamic menus (always visible)
+    // Wire dynamic menus
     const branchesBtn = document.getElementById('menuBranches');
-    if (branchesBtn) { branchesBtn.classList.remove('hidden'); branchesBtn.onclick = () => switchView('branches'); }
-
+    if (branchesBtn) { branchesBtn.onclick = () => switchView('branches'); }
     const customersBtn = document.getElementById('menuCustomers');
-    if (customersBtn) { customersBtn.classList.remove('hidden'); customersBtn.onclick = () => switchView('customers'); }
-
+    if (customersBtn) { customersBtn.onclick = () => switchView('customers'); }
+    const expensesBtn = document.getElementById('menuExpenses');
+    if (expensesBtn) { expensesBtn.onclick = () => switchView('expenses'); }
+    const suppliersBtn = document.getElementById('menuSuppliers');
+    if (suppliersBtn) { suppliersBtn.onclick = () => switchView('suppliers'); }
+    const shiftsBtn = document.getElementById('menuShifts');
+    if (shiftsBtn) { shiftsBtn.onclick = () => switchView('shifts'); }
     const logisticsBtn = document.getElementById('menuLogistics');
-    if (logisticsBtn) logisticsBtn.onclick = () => switchView('logistics');
-
+    if (logisticsBtn) { logisticsBtn.onclick = () => switchView('logistics'); }
     const adminBtn = document.getElementById('menuAdmin');
-    if (adminBtn) adminBtn.onclick = () => switchView('admin');
+    if (adminBtn) { adminBtn.onclick = () => switchView('admin'); }
+
+    // Check if there's an open shift and light up the dot
+    updateShiftDot();
 }
 
 // ============================================================

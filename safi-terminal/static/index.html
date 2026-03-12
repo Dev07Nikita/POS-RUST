@@ -291,12 +291,35 @@
                         <span class="material-icons text-lg">people</span>
                         Customers
                     </button>
+
+                    <!-- Separator -->
+                    <div class="my-2 border-t border-slate-700/50"></div>
+                    <p class="text-[9px] font-black uppercase tracking-widest text-slate-600 px-2 mb-1">Operations</p>
+
+                    <button id="menuExpenses" onclick="switchView('expenses')"
+                        class="w-full text-left px-4 py-3 rounded-xl hover:bg-white/5 flex items-center gap-3 font-bold text-sm text-slate-400 hidden">
+                        <span class="material-icons text-lg">receipt_long</span>
+                        Expenses
+                    </button>
+                    <button id="menuSuppliers" onclick="switchView('suppliers')"
+                        class="w-full text-left px-4 py-3 rounded-xl hover:bg-white/5 flex items-center gap-3 font-bold text-sm text-slate-400 hidden">
+                        <span class="material-icons text-lg">local_shipping</span>
+                        Suppliers
+                    </button>
+                    <button id="menuShifts" onclick="switchView('shifts')"
+                        class="w-full text-left px-4 py-3 rounded-xl hover:bg-white/5 flex items-center gap-3 font-bold text-sm text-slate-400">
+                        <span class="material-icons text-lg">schedule</span>
+                        Shift Manager
+                        <span id="shift-status-dot" class="ml-auto w-2 h-2 rounded-full bg-slate-600"></span>
+                    </button>
+
                     <button onclick="handleLogout()"
                         class="w-full text-left px-4 py-3 rounded-xl hover:bg-red-500/10 text-red-500 flex items-center gap-3 font-bold text-sm mt-4">
                         <span class="material-icons text-lg">logout</span>
                         Sign Out
                     </button>
                 </div>
+
             </div>
 
             <div class="mt-auto bg-slate-800/50 p-4 rounded-2xl border border-slate-700">
@@ -605,6 +628,72 @@
             <!-- Customer Cards -->
             <div id="customers-content" class="flex-grow overflow-y-auto scrollbar-custom pr-2 grid grid-cols-2 gap-4 content-start">
                 <p class="col-span-2 text-center text-slate-500 py-12">Loading customers...</p>
+            </div>
+        </section>
+
+        <!-- ===== EXPENSES VIEW ===== -->
+        <section id="viewExpenses" class="glass rounded-3xl p-6 flex flex-col hidden" style="max-height:calc(100vh - 120px)">
+            <div class="flex justify-between items-center mb-4">
+                <div>
+                    <h2 class="text-3xl font-black tracking-tight">Expense Tracker</h2>
+                    <p class="text-xs font-bold text-slate-400 mt-1 uppercase tracking-widest">Business Cost Management</p>
+                </div>
+                <div class="flex gap-3">
+                    <select id="expense-cat-filter" onchange="loadExpenses()" class="text-xs bg-slate-800 border border-slate-700 rounded-xl px-4 py-2 text-white outline-none focus:border-amber-500">
+                        <option value="">All Categories</option>
+                        <option>STOCK</option><option>RENT</option><option>UTILITIES</option>
+                        <option>SALARIES</option><option>MARKETING</option><option>TRANSPORT</option><option>OTHER</option>
+                    </select>
+                    <button onclick="openAddExpenseModal()"
+                        class="px-5 py-2.5 gold-gradient rounded-xl font-black text-sm text-slate-900 shadow-[0_0_15px_rgba(245,158,11,0.2)] hover:scale-105 transition-all flex items-center gap-2">
+                        <span class="material-icons text-base">add_circle</span>LOG EXPENSE
+                    </button>
+                </div>
+            </div>
+            <div id="expense-stats" class="grid grid-cols-4 gap-4 mb-5"></div>
+            <div id="expenses-content" class="flex-grow overflow-y-auto scrollbar-custom">
+                <p class="text-center text-slate-500 py-12">Loading expenses...</p>
+            </div>
+        </section>
+
+        <!-- ===== SUPPLIERS VIEW ===== -->
+        <section id="viewSuppliers" class="glass rounded-3xl p-6 flex flex-col hidden" style="max-height:calc(100vh - 120px)">
+            <div class="flex justify-between items-center mb-4">
+                <div>
+                    <h2 class="text-3xl font-black tracking-tight">Suppliers</h2>
+                    <p class="text-xs font-bold text-slate-400 mt-1 uppercase tracking-widest">Vendor & Purchase Management</p>
+                </div>
+                <div class="flex gap-3">
+                    <input id="supplier-search" type="text" placeholder="🔍 Search suppliers..." oninput="searchSuppliers(this.value)"
+                        class="w-52 text-sm bg-slate-800 border border-slate-700 rounded-xl px-4 py-2 text-white outline-none focus:border-amber-500">
+                    <button onclick="openAddSupplierModal()"
+                        class="px-5 py-2.5 gold-gradient rounded-xl font-black text-sm text-slate-900 shadow-[0_0_15px_rgba(245,158,11,0.2)] hover:scale-105 transition-all flex items-center gap-2">
+                        <span class="material-icons text-base">add_business</span>ADD SUPPLIER
+                    </button>
+                </div>
+            </div>
+            <div id="supplier-stats" class="grid grid-cols-4 gap-4 mb-5"></div>
+            <div id="suppliers-content" class="flex-grow overflow-y-auto scrollbar-custom pr-2 grid grid-cols-2 gap-4 content-start">
+                <p class="col-span-2 text-center text-slate-500 py-12">Loading suppliers...</p>
+            </div>
+        </section>
+
+        <!-- ===== SHIFT MANAGER VIEW ===== -->
+        <section id="viewShifts" class="glass rounded-3xl p-6 flex flex-col hidden" style="max-height:calc(100vh - 120px)">
+            <div class="flex justify-between items-center mb-4">
+                <div>
+                    <h2 class="text-3xl font-black tracking-tight">Shift Manager</h2>
+                    <p class="text-xs font-bold text-slate-400 mt-1 uppercase tracking-widest">Cash Float & Reconciliation</p>
+                </div>
+            </div>
+            <!-- Current shift status + open/close -->
+            <div id="shift-current-panel" class="mb-5"></div>
+            <!-- Shift history -->
+            <div class="flex-grow overflow-y-auto scrollbar-custom">
+                <p class="text-xs font-black uppercase text-slate-500 mb-3">Shift History</p>
+                <div id="shift-history" class="space-y-3">
+                    <p class="text-slate-500 text-sm text-center py-6">Loading shift history...</p>
+                </div>
             </div>
         </section>
 
