@@ -339,10 +339,16 @@ async function syncProductsFromHub() {
 }
 
 function switchView(view) {
-    const views = ['viewCheckout', 'viewInventory', 'viewAnalytics', 'viewSupport', 'viewLogistics', 'viewAdmin', 'viewBranches'];
+    const views = ['viewCheckout', 'viewInventory', 'viewAnalytics', 'viewSupport', 'viewLogistics', 'viewAdmin', 'viewBranches', 'viewCustomers'];
     views.forEach(id => {
         const el = document.getElementById(id);
         if (el) el.classList.add('hidden');
+    });
+
+    // Update sidebar active state
+    document.querySelectorAll('aside button[id^="menu"]').forEach(b => {
+        b.classList.remove('bg-amber-500/10', 'text-amber-500');
+        b.classList.add('text-slate-400');
     });
 
     if (view === 'checkout') {
@@ -351,24 +357,42 @@ function switchView(view) {
     } else if (view === 'inventory') {
         document.getElementById('viewInventory').classList.remove('hidden');
         const addBtn = document.querySelector('#viewInventory button');
-        if (state.user.role === 'CASHIER') addBtn.classList.add('hidden');
-        else addBtn.classList.remove('hidden');
+        if (state.user.role === 'CASHIER') addBtn?.classList.add('hidden');
+        else addBtn?.classList.remove('hidden');
         loadInventory();
+        activateMenuBtn('menuInventory');
     } else if (view === 'analytics') {
         document.getElementById('viewAnalytics').classList.remove('hidden');
         loadAnalytics();
+        activateMenuBtn('menuReports');
     } else if (view === 'support') {
         document.getElementById('viewSupport').classList.remove('hidden');
         loadIssues();
+        activateMenuBtn('menuSupport');
     } else if (view === 'logistics') {
         const logView = document.getElementById('viewLogistics');
         if (logView) { logView.classList.remove('hidden'); loadLogistics(); }
+        activateMenuBtn('menuLogistics');
     } else if (view === 'admin') {
         const adminView = document.getElementById('viewAdmin');
         if (adminView) { adminView.classList.remove('hidden'); loadAdminHub(); }
+        activateMenuBtn('menuAdmin');
     } else if (view === 'branches') {
         const brView = document.getElementById('viewBranches');
         if (brView) { brView.classList.remove('hidden'); loadBranches(); }
+        activateMenuBtn('menuBranches');
+    } else if (view === 'customers') {
+        const custView = document.getElementById('viewCustomers');
+        if (custView) { custView.classList.remove('hidden'); loadCustomers(); }
+        activateMenuBtn('menuCustomers');
+    }
+}
+
+function activateMenuBtn(id) {
+    const btn = document.getElementById(id);
+    if (btn) {
+        btn.classList.remove('text-slate-400');
+        btn.classList.add('bg-amber-500/10', 'text-amber-500');
     }
 }
 
@@ -1080,16 +1104,16 @@ async function loadAdminHub() {
 
 function applyPermissions(role) {
     const permissions = {
-        'ADMIN': ['menuInventory', 'menuReports', 'menuLogistics', 'menuAdmin', 'menuBranches', 'menuSupport'],
-        'MANAGER': ['menuInventory', 'menuReports', 'menuBranches', 'menuSupport'],
-        'LOGISTICS': ['menuLogistics', 'menuBranches', 'menuSupport'],
-        'CASHIER': ['menuBranches', 'menuSupport'],
-        'SALES': ['menuReports', 'menuBranches', 'menuSupport'],
-        'USER': ['menuBranches', 'menuSupport']
+        'ADMIN':     ['menuInventory', 'menuReports', 'menuLogistics', 'menuAdmin', 'menuBranches', 'menuCustomers', 'menuSupport'],
+        'MANAGER':   ['menuInventory', 'menuReports', 'menuBranches', 'menuCustomers', 'menuSupport'],
+        'LOGISTICS': ['menuLogistics', 'menuBranches', 'menuCustomers', 'menuSupport'],
+        'CASHIER':   ['menuBranches', 'menuCustomers', 'menuSupport'],
+        'SALES':     ['menuReports', 'menuBranches', 'menuCustomers', 'menuSupport'],
+        'USER':      ['menuBranches', 'menuCustomers', 'menuSupport']
     };
 
     // Hide ALL privileged menus first
-    ['menuInventory', 'menuReports', 'menuLogistics', 'menuAdmin', 'menuBranches', 'menuSupport'].forEach(id => {
+    ['menuInventory', 'menuReports', 'menuLogistics', 'menuAdmin', 'menuBranches', 'menuCustomers', 'menuSupport'].forEach(id => {
         const el = document.getElementById(id);
         if (el) el.classList.add('hidden');
     });
@@ -1100,14 +1124,13 @@ function applyPermissions(role) {
         if (el) el.classList.remove('hidden');
     });
 
-    // Always ensure Branches is visible — every staff member should see company locations
+    // Wire up dynamic menus (always visible)
     const branchesBtn = document.getElementById('menuBranches');
-    if (branchesBtn) {
-        branchesBtn.classList.remove('hidden');
-        branchesBtn.onclick = () => switchView('branches');
-    }
+    if (branchesBtn) { branchesBtn.classList.remove('hidden'); branchesBtn.onclick = () => switchView('branches'); }
 
-    // Wire up other dynamic menus
+    const customersBtn = document.getElementById('menuCustomers');
+    if (customersBtn) { customersBtn.classList.remove('hidden'); customersBtn.onclick = () => switchView('customers'); }
+
     const logisticsBtn = document.getElementById('menuLogistics');
     if (logisticsBtn) logisticsBtn.onclick = () => switchView('logistics');
 
@@ -1439,7 +1462,516 @@ async function toggleBranch(id) {
     }
 }
 
+// ============================================================
+// CUSTOMERS — CRM & Loyalty Management (like Square/Shopify)
+// ============================================================
 
+let allCustomers = [];
+let selectedCustomer = null;
+
+async function loadCustomers() {
+    const grid = document.getElementById('customers-content');
+    const statsEl = document.getElementById('crm-stats');
+    if (!grid) return;
+    grid.innerHTML = '<p class="col-span-2 text-center text-slate-500 py-12">Loading...</p>';
+
+    try {
+        const [custResp, sumResp] = await Promise.all([
+            fetch('http://localhost:8080/api/customers'),
+            fetch('http://localhost:8080/api/customers/summary')
+        ]);
+        if (!custResp.ok) throw new Error('Backend not reachable');
+        allCustomers = await custResp.json();
+        const sum = sumResp.ok ? await sumResp.json() : {};
+
+        if (statsEl) {
+            statsEl.innerHTML = `
+                <div class="bg-slate-800 p-4 rounded-2xl border border-slate-700 text-center">
+                    <p class="text-slate-400 text-xs font-bold uppercase mb-1">Total Customers</p>
+                    <p class="text-3xl font-black text-white">${sum.total ?? allCustomers.length}</p>
+                </div>
+                <div class="bg-amber-900/20 p-4 rounded-2xl border border-amber-500/20 text-center">
+                    <p class="text-amber-400 text-xs font-bold uppercase mb-1">Loyalty Points</p>
+                    <p class="text-3xl font-black text-amber-400">${(sum.totalLoyaltyPoints ?? 0).toLocaleString()}</p>
+                </div>
+                <div class="bg-green-900/20 p-4 rounded-2xl border border-green-500/20 text-center">
+                    <p class="text-green-400 text-xs font-bold uppercase mb-1">Total Spend</p>
+                    <p class="text-3xl font-black text-green-400">KES ${(sum.totalSpend ?? 0).toLocaleString()}</p>
+                </div>`;
+        }
+        renderCustomerCards(allCustomers);
+    } catch (e) {
+        grid.innerHTML = `<div class="col-span-2 text-center py-12">
+            <p class="text-5xl mb-3">🔌</p>
+            <p class="font-black text-slate-300">Backend Not Reachable</p>
+            <p class="text-slate-500 text-sm mt-1">Make sure Spring Boot is running on port 8080</p>
+            <button onclick="loadCustomers()" class="mt-4 px-6 py-2 gold-gradient rounded-xl text-sm font-black text-slate-900">🔄 Retry</button>
+        </div>`;
+    }
+}
+
+function renderCustomerCards(customers) {
+    const grid = document.getElementById('customers-content');
+    if (!grid) return;
+    if (customers.length === 0) {
+        grid.innerHTML = `<div class="col-span-2 text-center py-16">
+            <p class="text-5xl mb-3">👥</p>
+            <p class="font-black text-lg text-slate-300">No Customers Yet</p>
+            <p class="text-slate-500 text-sm mt-1">Add your first customer to start building loyalty</p>
+        </div>`;
+        return;
+    }
+    grid.innerHTML = customers.map(c => `
+        <div class="bg-slate-800/80 rounded-2xl border border-slate-700 hover:border-amber-500/40 p-5 flex flex-col gap-3 transition-all">
+            <div class="flex justify-between items-start">
+                <div>
+                    <div class="w-10 h-10 rounded-full bg-amber-500/20 border border-amber-500/30 flex items-center justify-center text-amber-400 font-black text-lg mb-2">
+                        ${(c.name || '?')[0].toUpperCase()}
+                    </div>
+                    <h3 class="font-black text-white">${c.name}</h3>
+                    <p class="text-xs text-slate-400">${c.phone || 'No phone'}</p>
+                    ${c.email ? `<p class="text-xs text-slate-500">${c.email}</p>` : ''}
+                </div>
+                <div class="flex flex-col gap-1.5">
+                    <button onclick="openEditCustomerModal(${c.id})" class="px-3 py-1.5 bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 rounded-lg text-xs font-black border border-amber-500/20 transition-all">✏️ Edit</button>
+                    <button onclick="viewCustomerHistory(${c.id}, '${c.name.replace(/'/g,"\\'")}') " class="px-3 py-1.5 bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 rounded-lg text-xs font-black border border-blue-500/20 transition-all">🧾 History</button>
+                    <button onclick="confirmDeleteCustomer(${c.id}, '${c.name.replace(/'/g,"\\'")}') " class="px-3 py-1.5 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded-lg text-xs font-black border border-red-500/20 transition-all">🗑️</button>
+                </div>
+            </div>
+            <div class="grid grid-cols-3 gap-2 pt-2 border-t border-slate-700/60 text-center">
+                <div>
+                    <p class="text-[10px] text-slate-500 uppercase font-bold">Visits</p>
+                    <p class="font-black text-white">${c.totalVisits ?? 0}</p>
+                </div>
+                <div>
+                    <p class="text-[10px] text-amber-500 uppercase font-bold">Points</p>
+                    <p class="font-black text-amber-400">${c.loyaltyPoints ?? 0}</p>
+                </div>
+                <div>
+                    <p class="text-[10px] text-green-500 uppercase font-bold">Spent</p>
+                    <p class="font-black text-green-400 text-xs">KES ${(c.totalSpent ?? 0).toLocaleString()}</p>
+                </div>
+            </div>
+        </div>`).join('');
+}
+
+function filterCrm(q) {
+    if (!q) return renderCustomerCards(allCustomers);
+    const lq = q.toLowerCase();
+    renderCustomerCards(allCustomers.filter(c =>
+        (c.name || '').toLowerCase().includes(lq) || (c.phone || '').includes(lq)));
+}
+
+function customerFormHTML(c = {}) {
+    const v = (k, d = '') => c[k] != null ? String(c[k]).replace(/"/g, '&quot;') : d;
+    const isEdit = !!c.id;
+    return `
+        <div class="text-left">
+            <div class="flex items-center gap-3 mb-5">
+                <span class="text-3xl">${isEdit ? '✏️' : '👤'}</span>
+                <div>
+                    <h2 class="text-2xl font-black">${isEdit ? 'Edit Customer' : 'New Customer'}</h2>
+                    <p class="text-xs text-slate-400">${isEdit ? 'Update customer profile' : 'Add to your CRM database'}</p>
+                </div>
+            </div>
+            ${c.id ? `<input type="hidden" id="cust-id" value="${c.id}">` : ''}
+            <div class="space-y-4">
+                <div><label class="text-xs text-amber-400 font-black uppercase mb-1 block">Full Name *</label>
+                    <input id="cust-name" type="text" value="${v('name')}" placeholder="Jane Wanjiku"
+                        class="w-full bg-slate-700 p-3 rounded-xl border border-slate-600 text-white outline-none focus:border-amber-500 transition-all"></div>
+                <div><label class="text-xs text-slate-400 font-black uppercase mb-1 block">Phone Number</label>
+                    <input id="cust-phone" type="tel" value="${v('phone')}" placeholder="0712345678"
+                        class="w-full bg-slate-700 p-3 rounded-xl border border-slate-600 text-white outline-none focus:border-amber-500 transition-all"></div>
+                <div><label class="text-xs text-slate-400 font-black uppercase mb-1 block">Email</label>
+                    <input id="cust-email" type="email" value="${v('email')}" placeholder="jane@example.com"
+                        class="w-full bg-slate-700 p-3 rounded-xl border border-slate-600 text-white outline-none focus:border-amber-500 transition-all"></div>
+                <div><label class="text-xs text-slate-400 font-black uppercase mb-1 block">Notes / Preferences</label>
+                    <textarea id="cust-notes" rows="2" placeholder="Allergies, preferences..."
+                        class="w-full bg-slate-700 p-3 rounded-xl border border-slate-600 text-white outline-none focus:border-amber-500 transition-all resize-none">${v('notes')}</textarea></div>
+                <div class="flex gap-3 pt-2">
+                    <button onclick="saveCustomer(${c.id || 'null'})" class="flex-grow py-4 gold-gradient rounded-xl font-black text-slate-900 hover:scale-[1.02] transition-all">
+                        ${isEdit ? '💾 UPDATE' : '➕ ADD CUSTOMER'}
+                    </button>
+                    <button onclick="closeEditModal()" class="px-6 glass rounded-xl font-bold border border-slate-600 text-slate-300 hover:border-slate-400 transition-all">Cancel</button>
+                </div>
+            </div>
+        </div>`;
+}
+
+function openAddCustomerModal() { openEditModal(customerFormHTML()); setTimeout(() => document.getElementById('cust-name')?.focus(), 100); }
+
+function openEditCustomerModal(id) {
+    openEditModal('<div class="text-center py-10"><div class="w-8 h-8 border-2 border-amber-500 border-t-transparent rounded-full animate-spin mx-auto mb-3"></div><p class="text-slate-400">Loading...</p></div>');
+    fetch(`http://localhost:8080/api/customers/${id}`)
+        .then(r => { if (!r.ok) throw new Error(); return r.json(); })
+        .then(c => { document.getElementById('edit-content').innerHTML = customerFormHTML(c); })
+        .catch(() => showNotification('Could not load customer', '❌', 'Error'));
+}
+
+async function saveCustomer(id = null) {
+    const nameEl = document.getElementById('cust-name');
+    if (!nameEl?.value.trim()) { nameEl?.classList.add('border-red-500'); nameEl?.focus(); return showNotification('Name is required', '⚠️', 'Validation'); }
+    const body = {
+        name:  (document.getElementById('cust-name')?.value || '').trim(),
+        phone: (document.getElementById('cust-phone')?.value || '').trim(),
+        email: (document.getElementById('cust-email')?.value || '').trim(),
+        notes: (document.getElementById('cust-notes')?.value || '').trim()
+    };
+    const url = id && id !== 'null' ? `http://localhost:8080/api/customers/${id}` : 'http://localhost:8080/api/customers';
+    const method = id && id !== 'null' ? 'PUT' : 'POST';
+    try {
+        const resp = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+        if (resp.ok) { closeEditModal(); showNotification(`Customer "${body.name}" ${method === 'PUT' ? 'updated' : 'added'}!`, '✅', 'Saved'); loadCustomers(); }
+        else { const e = await resp.json().catch(() => ({})); showNotification(e.error || 'Save failed', '❌', 'Error'); }
+    } catch (e) { showNotification('Backend not reachable', '❌', 'Error'); }
+}
+
+function confirmDeleteCustomer(id, name) {
+    openEditModal(`<div class="text-center py-4">
+        <p class="text-5xl mb-4">🗑️</p>
+        <h3 class="text-xl font-black text-red-400 mb-2">Remove Customer?</h3>
+        <p class="text-slate-300 text-sm mb-5">Delete <strong>"${name}"</strong> from CRM?</p>
+        <div class="flex gap-3 justify-center">
+            <button onclick="deleteCustomer(${id})" class="px-8 py-3 bg-red-600 hover:bg-red-500 rounded-xl font-black text-white">YES, DELETE</button>
+            <button onclick="closeEditModal()" class="px-8 py-3 glass rounded-xl font-bold border border-slate-600 text-slate-300">Cancel</button>
+        </div></div>`);
+}
+
+async function deleteCustomer(id) {
+    try {
+        const r = await fetch(`http://localhost:8080/api/customers/${id}`, { method: 'DELETE' });
+        if (r.ok) { closeEditModal(); showNotification('Customer removed', '🗑️', 'Deleted'); loadCustomers(); }
+        else showNotification('Delete failed', '❌', 'Error');
+    } catch (e) { showNotification('Backend not reachable', '❌', 'Error'); }
+}
+
+async function viewCustomerHistory(id, name) {
+    openEditModal(`<div class="text-center py-6"><div class="w-6 h-6 border-2 border-amber-500 border-t-transparent rounded-full animate-spin mx-auto mb-3"></div><p class="text-slate-400">Loading history for ${name}...</p></div>`);
+    try {
+        const r = await fetch(`http://localhost:8080/api/sales/customer/${id}`);
+        const sales = r.ok ? await r.json() : [];
+        document.getElementById('edit-content').innerHTML = `
+            <div class="text-left">
+                <h2 class="text-xl font-black mb-4">🧾 Purchase History — ${name}</h2>
+                ${sales.length === 0
+                    ? '<p class="text-center text-slate-500 py-8">No purchases recorded for this customer.</p>'
+                    : `<div class="space-y-2 max-h-96 overflow-y-auto">${sales.map(s => `
+                        <div class="flex justify-between items-center p-3 bg-slate-800 rounded-xl">
+                            <div>
+                                <p class="text-xs font-black text-white">${s.transactionId || 'TXN-' + s.id}</p>
+                                <p class="text-[11px] text-slate-400">${s.timestamp ? new Date(s.timestamp).toLocaleString() : ''}</p>
+                            </div>
+                            <div class="text-right">
+                                <p class="font-black text-amber-400 text-sm">KES ${(s.finalAmount ?? s.totalAmount ?? 0).toLocaleString()}</p>
+                                <p class="text-[10px] ${s.status === 'SUCCESS' ? 'text-green-400' : s.status === 'REFUNDED' ? 'text-red-400' : 'text-slate-400'}">${s.status}</p>
+                            </div>
+                        </div>`).join('')}</div>`}
+                <button onclick="closeEditModal()" class="w-full mt-4 py-3 glass rounded-xl font-bold border border-slate-600 text-slate-300">Close</button>
+            </div>`;
+    } catch (e) { document.getElementById('edit-content').innerHTML = '<p class="text-center text-red-400">Could not load history</p>'; }
+}
+
+// ============================================================
+// CUSTOMER LOOKUP IN CART — CRM integration at checkout
+// ============================================================
+
+let customerSearchTimeout = null;
+
+function searchCustomerInline(q) {
+    clearTimeout(customerSearchTimeout);
+    const drop = document.getElementById('customer-suggestions');
+    if (!drop) return;
+    if (!q || q.length < 2) { drop.classList.add('hidden'); return; }
+    customerSearchTimeout = setTimeout(async () => {
+        try {
+            const r = await fetch(`http://localhost:8080/api/customers/search?q=${encodeURIComponent(q)}`);
+            const results = r.ok ? await r.json() : [];
+            drop.innerHTML = results.length === 0
+                ? `<div class="px-4 py-3 text-slate-500 text-xs">No customers found. <button onclick="openAddCustomerFromCart('${q}')" class="text-amber-400 font-bold underline">Add new?</button></div>`
+                : results.map(c => `
+                    <button onclick="selectCustomer(${JSON.stringify(c).replace(/"/g,'&quot;')})"
+                        class="w-full text-left px-4 py-3 hover:bg-slate-700 transition-colors border-b border-slate-700/50 last:border-0">
+                        <p class="text-xs font-black text-white">${c.name}</p>
+                        <p class="text-[11px] text-slate-400">${c.phone || ''} · ${c.loyaltyPoints ?? 0} pts</p>
+                    </button>`).join('');
+            drop.classList.remove('hidden');
+        } catch (e) { drop.classList.add('hidden'); }
+    }, 300);
+}
+
+function selectCustomer(c) {
+    selectedCustomer = c;
+    document.getElementById('customer-suggestions')?.classList.add('hidden');
+    document.getElementById('customer-search-input').value = c.name;
+    document.getElementById('selected-customer-badge')?.classList.remove('hidden');
+    document.getElementById('clear-customer-btn')?.classList.remove('hidden');
+    const nameEl = document.getElementById('sel-cust-name');
+    const ptsEl  = document.getElementById('sel-cust-points');
+    if (nameEl) nameEl.textContent = c.name;
+    if (ptsEl)  ptsEl.textContent  = `${c.phone || ''} · ⭐ ${c.loyaltyPoints ?? 0} loyalty pts`;
+}
+
+function clearCustomer() {
+    selectedCustomer = null;
+    const inp = document.getElementById('customer-search-input');
+    if (inp) inp.value = '';
+    document.getElementById('customer-suggestions')?.classList.add('hidden');
+    document.getElementById('selected-customer-badge')?.classList.add('hidden');
+    document.getElementById('clear-customer-btn')?.classList.add('hidden');
+}
+
+function openAddCustomerFromCart(prefillPhone) {
+    document.getElementById('customer-suggestions')?.classList.add('hidden');
+    const html = customerFormHTML({ phone: prefillPhone });
+    openEditModal(html);
+    setTimeout(() => document.getElementById('cust-name')?.focus(), 100);
+}
+
+// ============================================================
+// CART DISCOUNTS (like Square's "Custom Amount" / Shopify "Buy X Get Y")
+// ============================================================
+
+let cartDiscount = { amount: 0, type: 'PERCENT' };
+
+function applyDiscount() {
+    const val  = parseFloat(document.getElementById('discount-input')?.value) || 0;
+    const type = document.getElementById('discount-type')?.value || 'PERCENT';
+    cartDiscount = { amount: val, type };
+    updateCartTotals();
+}
+
+function clearDiscount() {
+    cartDiscount = { amount: 0, type: 'PERCENT' };
+    const inp = document.getElementById('discount-input');
+    if (inp) inp.value = '';
+    const lbl = document.getElementById('discount-label');
+    if (lbl) lbl.textContent = '';
+    document.getElementById('final-amount-row')?.classList.add('hidden');
+    updateCartTotals();
+}
+
+function getCartSubtotal() {
+    return state.cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
+}
+
+function getCartFinalAmount() {
+    const sub = getCartSubtotal();
+    if (!cartDiscount.amount) return sub;
+    if (cartDiscount.type === 'PERCENT') return Math.max(0, sub - sub * (cartDiscount.amount / 100));
+    return Math.max(0, sub - cartDiscount.amount);
+}
+
+function getDiscountAmount() {
+    return getCartSubtotal() - getCartFinalAmount();
+}
+
+function updateCartTotals() {
+    const sub   = getCartSubtotal();
+    const final = getCartFinalAmount();
+    const disc  = sub - final;
+
+    const totalEl = document.getElementById('total-val');
+    const finalEl = document.getElementById('final-val');
+    const finalRow = document.getElementById('final-amount-row');
+    const lbl = document.getElementById('discount-label');
+
+    if (totalEl) totalEl.textContent = sub.toFixed(2);
+
+    if (disc > 0) {
+        if (finalEl)  finalEl.textContent  = final.toFixed(2);
+        if (finalRow) finalRow.classList.remove('hidden');
+        if (lbl)      lbl.textContent      = `- KES ${disc.toFixed(2)}`;
+    } else {
+        if (finalRow) finalRow.classList.add('hidden');
+        if (lbl)      lbl.textContent = '';
+    }
+}
+
+// ============================================================
+// HOLD / PARK ORDERS (like Square's "Save Order" / Lightspeed "Open Tickets")
+// ============================================================
+
+async function holdCurrentOrder() {
+    if (state.cart.length === 0) return showNotification('Cart is empty — nothing to hold', '⚠️', 'Empty Cart');
+    const sale = {
+        items: state.cart.map(i => ({
+            productName: i.name,
+            productId: i.id,
+            quantity: i.quantity,
+            unitPrice: i.price,
+            subtotal: i.price * i.quantity
+        })),
+        totalAmount: getCartSubtotal(),
+        discountAmount: getDiscountAmount(),
+        discountType: cartDiscount.type,
+        finalAmount: getCartFinalAmount(),
+        customerId: selectedCustomer?.id ?? null,
+        customerName: selectedCustomer?.name ?? null,
+        cashierUsername: state.user?.name ?? null,
+        notes: `Held by ${state.user?.name ?? 'cashier'}`
+    };
+    try {
+        const r = await fetch('http://localhost:8080/api/sales/hold', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(sale)
+        });
+        if (r.ok) {
+            clearCartFull();
+            showNotification('Order parked! Recall it from the ⏸ button', '⏸️', 'Order Held');
+        } else showNotification('Hold failed: ' + r.status, '❌', 'Error');
+    } catch (e) { showNotification('Backend not reachable', '❌', 'Error'); }
+}
+
+async function openHeldOrders() {
+    openEditModal('<div class="text-center py-8"><div class="w-6 h-6 border-2 border-amber-500 border-t-transparent rounded-full animate-spin mx-auto mb-3"></div><p class="text-slate-400">Loading held orders...</p></div>');
+    try {
+        const r = await fetch('http://localhost:8080/api/sales/held');
+        const held = r.ok ? await r.json() : [];
+        document.getElementById('edit-content').innerHTML = `
+            <div class="text-left">
+                <h2 class="text-xl font-black mb-4">⏸️ Parked Orders (${held.length})</h2>
+                ${held.length === 0
+                    ? '<p class="text-center text-slate-500 py-8">No held orders at this time.</p>'
+                    : `<div class="space-y-3 max-h-80 overflow-y-auto">${held.map(s => `
+                        <div class="p-4 bg-slate-800 rounded-xl border border-slate-700 hover:border-amber-500/40 transition-all">
+                            <div class="flex justify-between items-center mb-2">
+                                <div>
+                                    <p class="font-black text-sm text-white">${s.customerName || s.transactionId || 'Order #' + s.id}</p>
+                                    <p class="text-[11px] text-slate-400">${s.timestamp ? new Date(s.timestamp).toLocaleString() : ''} · ${s.items?.length ?? 0} items</p>
+                                </div>
+                                <p class="font-black text-amber-400">KES ${(s.finalAmount ?? s.totalAmount ?? 0).toFixed(2)}</p>
+                            </div>
+                            <div class="flex gap-2">
+                                <button onclick="recallOrder(${JSON.stringify(s).replace(/"/g,'&quot;')})"
+                                    class="flex-grow py-2 gold-gradient rounded-lg font-black text-xs text-slate-900">▶️ RECALL</button>
+                                <button onclick="discardHeldOrder(${s.id})"
+                                    class="px-4 py-2 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded-lg font-bold text-xs border border-red-500/20">🗑️</button>
+                            </div>
+                        </div>`).join('')}</div>`}
+                <button onclick="closeEditModal()" class="w-full mt-3 py-2.5 glass rounded-xl font-bold border border-slate-600 text-slate-300 text-sm">Close</button>
+            </div>`;
+    } catch (e) { document.getElementById('edit-content').innerHTML = '<p class="text-center text-red-400 py-6">Could not load held orders</p>'; }
+}
+
+function recallOrder(sale) {
+    closeEditModal();
+    // Rebuild cart from held order items
+    state.cart = (sale.items || []).map(i => ({
+        id: i.productId || 0, name: i.productName, price: i.unitPrice, quantity: i.quantity
+    }));
+    if (sale.customerId && sale.customerName) {
+        selectCustomer({ id: sale.customerId, name: sale.customerName, phone: '', loyaltyPoints: 0 });
+    }
+    if (sale.discountAmount) {
+        cartDiscount = { amount: sale.discountAmount, type: sale.discountType || 'FIXED' };
+        const inp = document.getElementById('discount-input');
+        const sel = document.getElementById('discount-type');
+        if (inp) inp.value = sale.discountAmount;
+        if (sel) sel.value = sale.discountType || 'FIXED';
+    }
+    switchView('checkout');
+    renderCart();
+    updateCartTotals();
+    // Delete held record
+    discardHeldOrder(sale.id, true);
+    showNotification('Order recalled to cart!', '✅', 'Order Restored');
+}
+
+async function discardHeldOrder(id, silent = false) {
+    try {
+        await fetch(`http://localhost:8080/api/sales/held/${id}`, { method: 'DELETE' });
+        if (!silent) { closeEditModal(); openHeldOrders(); showNotification('Held order discarded', '🗑️', 'Removed'); }
+    } catch (e) { if (!silent) showNotification('Could not discard order', '❌', 'Error'); }
+}
+
+function clearCartFull() {
+    state.cart = [];
+    clearCustomer();
+    clearDiscount();
+    renderCart();
+    updateCartTotals();
+}
+
+// ============================================================
+// Z-REPORT — End of Day Report (like Square / Lightspeed)
+// ============================================================
+
+async function openZReportModal() {
+    const today = new Date().toISOString().split('T')[0];
+    openEditModal(`<div class="text-center py-8"><div class="w-6 h-6 border-2 border-amber-500 border-t-transparent rounded-full animate-spin mx-auto mb-3"></div><p class="text-slate-400">Generating Z-Report...</p></div>`);
+    try {
+        const r = await fetch(`http://localhost:8080/api/sales/z-report?date=${today}`);
+        if (!r.ok) throw new Error('Could not generate report');
+        const rep = await r.json();
+        const html = `
+            <div class="text-left">
+                <div class="flex items-center gap-3 mb-5">
+                    <span class="text-3xl">📊</span>
+                    <div>
+                        <h2 class="text-2xl font-black">Z-Report — End of Day</h2>
+                        <p class="text-xs text-slate-400">${new Date(rep.date).toLocaleDateString('en-KE', { weekday:'long', year:'numeric', month:'long', day:'numeric' })}</p>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-2 gap-3 mb-4">
+                    <div class="bg-slate-800 p-4 rounded-xl border border-slate-700">
+                        <p class="text-xs text-slate-400 uppercase font-bold mb-1">Total Transactions</p>
+                        <p class="text-3xl font-black text-white">${rep.totalTransactions}</p>
+                    </div>
+                    <div class="bg-green-900/20 p-4 rounded-xl border border-green-500/20">
+                        <p class="text-xs text-green-400 uppercase font-bold mb-1">Total Revenue</p>
+                        <p class="text-3xl font-black text-green-400">KES ${Number(rep.totalRevenue).toLocaleString()}</p>
+                    </div>
+                    <div class="bg-amber-900/20 p-4 rounded-xl border border-amber-500/20">
+                        <p class="text-xs text-amber-400 uppercase font-bold mb-1">Total Discounts Given</p>
+                        <p class="text-2xl font-black text-amber-400">KES ${Number(rep.totalDiscount ?? 0).toLocaleString()}</p>
+                    </div>
+                    <div class="bg-red-900/20 p-4 rounded-xl border border-red-500/20">
+                        <p class="text-xs text-red-400 uppercase font-bold mb-1">Refunds</p>
+                        <p class="text-2xl font-black text-red-400">${rep.refunds}</p>
+                    </div>
+                </div>
+
+                <div class="bg-slate-800 rounded-xl border border-slate-700 p-4 mb-4">
+                    <p class="text-xs font-bold uppercase text-slate-400 mb-3">Payment Breakdown</p>
+                    <div class="grid grid-cols-2 gap-3">
+                        <div class="flex justify-between items-center">
+                            <span class="text-sm text-slate-300">💸 Cash (${rep.cashTransactions} txns)</span>
+                            <span class="font-black text-white">KES ${Number(rep.cashTotal).toLocaleString()}</span>
+                        </div>
+                        <div class="flex justify-between items-center">
+                            <span class="text-sm text-slate-300">📱 M-Pesa (${rep.mpesaTransactions} txns)</span>
+                            <span class="font-black text-green-400">KES ${Number(rep.mpesaTotal).toLocaleString()}</span>
+                        </div>
+                    </div>
+                </div>
+
+                ${rep.salesByCashier && Object.keys(rep.salesByCashier).length > 0 ? `
+                <div class="bg-slate-800 rounded-xl border border-slate-700 p-4 mb-4">
+                    <p class="text-xs font-bold uppercase text-slate-400 mb-3">👤 Sales by Cashier</p>
+                    ${Object.entries(rep.salesByCashier).map(([name, count]) =>
+                        `<div class="flex justify-between items-center py-1.5 border-b border-slate-700/50 last:border-0">
+                            <span class="text-sm text-slate-300">${name}</span>
+                            <span class="font-black text-amber-400">${count} transactions</span>
+                        </div>`).join('')}
+                </div>` : ''}
+
+                <div class="flex gap-3">
+                    <button onclick="window.print()" class="flex-grow py-3 glass rounded-xl font-bold border border-slate-600 text-slate-300 hover:border-amber-500/40 flex items-center justify-center gap-2">
+                        <span class="material-icons text-base">print</span> Print Report
+                    </button>
+                    <button onclick="closeEditModal()" class="px-6 py-3 glass rounded-xl font-bold border border-slate-600 text-slate-300">Close</button>
+                </div>
+            </div>`;
+        document.getElementById('edit-content').innerHTML = html;
+    } catch (e) {
+        document.getElementById('edit-content').innerHTML = `<div class="text-center py-8">
+            <p class="text-4xl mb-3">❌</p>
+            <p class="font-black text-red-400">Could not generate report</p>
+            <p class="text-slate-500 text-sm mt-1">${e.message}</p>
+            <button onclick="closeEditModal()" class="mt-4 px-6 py-2 glass rounded-xl text-sm border border-slate-600">Close</button>
+        </div>`;
+    }
+}
 
 function renderProducts() {
     const filtered = state.products.filter(p => {
